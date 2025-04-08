@@ -134,15 +134,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         const videoGrid = document.querySelector('.video-grid');
-        videoGrid.innerHTML = ''; // Clear existing videos
+        videoGrid.innerHTML = '';
 
-        videos.forEach(async (video) => {
-            // Get the public URL for the video
+        for (const video of videos) {
+            // Fix URL construction
             const { data } = window.supabaseClient.storage
                 .from('videos')
                 .getPublicUrl(video.url);
 
-            console.log('Video URL:', data.publicUrl); // Debug log
+            // Debug URL
+            console.log('Loading video:', {
+                originalUrl: video.url,
+                publicUrl: data.publicUrl
+            });
 
             const card = createVideoCard({
                 videoUrl: data.publicUrl,
@@ -152,14 +156,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                 timestamp: new Date(video.created_at).toLocaleDateString()
             });
             videoGrid.appendChild(card);
-        });
+        }
     }
 
+    // Remove the duplicate createVideoCard function and keep only this one
     function createVideoCard(video) {
         const card = document.createElement('div');
         card.className = 'video-card';
         card.innerHTML = `
-            <video controls preload="metadata" style="width: 100%; height: auto;">
+            <video controls>
                 <source src="${video.videoUrl}" type="video/mp4">
                 Your browser does not support the video tag.
             </video>
@@ -169,13 +174,20 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <p>${video.views} • ${video.timestamp}</p>
             </div>
         `;
+
+        // Debug video element
+        const videoElement = card.querySelector('video');
+        videoElement.addEventListener('error', (e) => {
+            console.error('Video loading error:', e);
+        });
+
         return card;
     }
 
     // Initial video load
     loadVideos();
 
-    // Remove all the sample video data and duplicate createVideoCard function below this line
+    // Delete everything below this line until the viewToggle code
     // Remove these sections as they're duplicating video grid population
     // Sample video data
     const videos = [
