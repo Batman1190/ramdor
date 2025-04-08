@@ -43,7 +43,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const { data, error } = await window.supabaseClient.auth.signInWithOAuth({
                     provider: 'google',
                     options: {
-                        redirectTo: 'http://127.0.0.1:5500',
+                        redirectTo: 'https://batman1190.github.io/ramdor/callback.html',
                         queryParams: {
                             access_type: 'offline',
                             prompt: 'consent'
