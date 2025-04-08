@@ -136,14 +136,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         const videoGrid = document.querySelector('.video-grid');
         videoGrid.innerHTML = ''; // Clear existing videos
 
-        videos.forEach(video => {
+        videos.forEach(async (video) => {
             // Get the public URL for the video
-            const videoUrl = window.supabaseClient.storage
+            const { data } = window.supabaseClient.storage
                 .from('videos')
-                .getPublicUrl(video.url).data.publicUrl;
+                .getPublicUrl(video.url);
+
+            console.log('Video URL:', data.publicUrl); // Debug log
 
             const card = createVideoCard({
-                videoUrl: videoUrl,
+                videoUrl: data.publicUrl,
                 title: video.title,
                 author: video.user_id,
                 views: '0 views',
@@ -157,7 +159,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const card = document.createElement('div');
         card.className = 'video-card';
         card.innerHTML = `
-            <video controls>
+            <video controls preload="metadata" style="width: 100%; height: auto;">
                 <source src="${video.videoUrl}" type="video/mp4">
                 Your browser does not support the video tag.
             </video>
@@ -173,6 +175,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Initial video load
     loadVideos();
 
+    // Remove all the sample video data and duplicate createVideoCard function below this line
     // Remove these sections as they're duplicating video grid population
     // Sample video data
     const videos = [
