@@ -79,13 +79,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             
             try {
                 console.log('Uploading to storage...');
-                // Upload to Supabase Storage with correct bucket name
+                // Upload to Supabase Storage
                 const { data, error } = await window.supabaseClient.storage
-                    .from('public-videos') // Change bucket name to match your Supabase storage bucket
+                    .from('videos') // Use 'videos' bucket
                     .upload(`${currentUser.id}/${fileName}`, file, {
                         upsert: false
                     });
-                    
+
                 if (error) {
                     console.error('Storage upload error:', error);
                     alert(`Error uploading video: ${error.message}`);
@@ -137,37 +137,48 @@ document.addEventListener('DOMContentLoaded', async () => {
         videoGrid.innerHTML = '';
 
         for (const video of videos) {
-            // Fix URL construction for Supabase storage with correct bucket
-            const { data } = window.supabaseClient.storage
-                .from('public-videos') // Change bucket name to match your Supabase storage bucket
-                .getPublicUrl(video.url);
+            try {
+                const { data } = window.supabaseClient.storage
+                    .from('videos')
+                    .getPublicUrl(video.url);
 
-            // Debug URL construction
-            console.log('Video data:', {
-                url: video.url,
-                publicUrl: data.publicUrl,
-                title: video.title
-            });
+                console.log('Loading video:', {
+                    originalUrl: video.url,
+                    publicUrl: data.publicUrl,
+                    title: video.title
+                });
 
-            const card = document.createElement('div');
-            card.className = 'video-card';
-            card.innerHTML = `
-                <video controls>
-                    <source src="${data.publicUrl}" type="video/mp4">
-                    Your browser does not support the video tag.
-                </video>
-                <div class="video-info">
-                    <h3>${video.title}</h3>
-                    <p>${video.user_id}</p>
-                    <p>${video.views || 0} views • ${new Date(video.created_at).toLocaleDateString()}</p>
-                </div>
-            `;
+                const card = document.createElement('div');
+                card.className = 'video-card';
+                card.innerHTML = `
+                    <video controls width="100%" height="auto" preload="metadata">
+                        <source src="${data.publicUrl}" type="video/mp4">
+                        Your browser does not support the video tag.
+                    </video>
+                    <div class="video-info">
+                        <h3>${video.title}</h3>
+                        <p>${video.user_id}</p>
+                        <p>${video.views || 0} views • ${new Date(video.created_at).toLocaleDateString()}</p>
+                    </div>
+                `;
 
-            videoGrid.appendChild(card);
+                // Add error handling for video loading
+                const videoElement = card.querySelector('video');
+                videoElement.addEventListener('error', (e) => {
+                    console.error('Video loading error:', e.target.error);
+                });
+
+                videoGrid.appendChild(card);
+            } catch (err) {
+                console.error('Error loading video:', err);
+            }
         }
     }
 
-    // Remove all duplicate code below this point
+    // Initial video load
+    loadVideos();
+
+    // Keep only the viewToggle code below this point and remove all other code
     function createVideoCard(video) {
         const card = document.createElement('div');
         card.className = 'video-card';
