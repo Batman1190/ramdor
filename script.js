@@ -137,8 +137,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         videoGrid.innerHTML = ''; // Clear existing videos
 
         videos.forEach(video => {
+            // Get the public URL for the video
+            const videoUrl = window.supabaseClient.storage
+                .from('videos')
+                .getPublicUrl(video.url).data.publicUrl;
+
             const card = createVideoCard({
-                thumbnail: `${window.SUPABASE_URL}/storage/v1/object/public/videos/${video.url}`,
+                videoUrl: videoUrl,
                 title: video.title,
                 author: video.user_id,
                 views: '0 views',
@@ -146,6 +151,23 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
             videoGrid.appendChild(card);
         });
+    }
+
+    function createVideoCard(video) {
+        const card = document.createElement('div');
+        card.className = 'video-card';
+        card.innerHTML = `
+            <video controls>
+                <source src="${video.videoUrl}" type="video/mp4">
+                Your browser does not support the video tag.
+            </video>
+            <div class="video-info">
+                <h3>${video.title}</h3>
+                <p>${video.author}</p>
+                <p>${video.views} • ${video.timestamp}</p>
+            </div>
+        `;
+        return card;
     }
 
     // Initial video load
