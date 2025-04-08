@@ -138,7 +138,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         videos.forEach(video => {
             const card = createVideoCard({
-                thumbnail: `${SUPABASE_URL}/storage/v1/object/public/videos/${video.url}`,
+                thumbnail: `${window.SUPABASE_URL}/storage/v1/object/public/videos/${video.url}`,
                 title: video.title,
                 author: video.user_id,
                 views: '0 views',
@@ -148,11 +148,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    // Remove the sample video data and grid population
-    // since we're loading real data from Supabase
     // Initial video load
     loadVideos();
 
+    // Remove these sections as they're duplicating video grid population
     // Sample video data
     const videos = [
         {
@@ -165,12 +164,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Add more video objects here
     ];
 
-    // Function to create video cards
+    // Function to create video cards (keep this)
     function createVideoCard(video) {
         const card = document.createElement('div');
         card.className = 'video-card';
         card.innerHTML = `
-            <img src="${video.thumbnail}" alt="${video.title}">
+            <video src="${video.thumbnail}" controls>
+                <source src="${video.thumbnail}" type="video/mp4">
+                Your browser does not support the video tag.
+            </video>
             <div class="video-info">
                 <h3>${video.title}</h3>
                 <p>${video.author}</p>
@@ -180,11 +182,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         return card;
     }
 
-    // Populate video grid
-    const videoGrid = document.querySelector('.video-grid');
-    videos.forEach(video => {
-        videoGrid.appendChild(createVideoCard(video));
-    });
+    // Remove this section as it's duplicate
+    // const videoGrid = document.querySelector('.video-grid');
+    // videos.forEach(video => {
+    //     videoGrid.appendChild(createVideoCard(video));
+    // });
 
     // Toggle between grid and feed view
     const viewToggle = document.createElement('button');
