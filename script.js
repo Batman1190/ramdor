@@ -79,9 +79,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             
             try {
                 console.log('Uploading to storage...');
-                // Upload to Supabase Storage
+                // Upload to Supabase Storage with correct bucket name
                 const { data, error } = await window.supabaseClient.storage
-                    .from('videos')
+                    .from('public-videos') // Change bucket name to match your Supabase storage bucket
                     .upload(`${currentUser.id}/${fileName}`, file, {
                         upsert: false
                     });
@@ -137,29 +137,37 @@ document.addEventListener('DOMContentLoaded', async () => {
         videoGrid.innerHTML = '';
 
         for (const video of videos) {
-            // Fix URL construction
+            // Fix URL construction for Supabase storage with correct bucket
             const { data } = window.supabaseClient.storage
-                .from('videos')
+                .from('public-videos') // Change bucket name to match your Supabase storage bucket
                 .getPublicUrl(video.url);
 
-            // Debug URL
-            console.log('Loading video:', {
-                originalUrl: video.url,
-                publicUrl: data.publicUrl
+            // Debug URL construction
+            console.log('Video data:', {
+                url: video.url,
+                publicUrl: data.publicUrl,
+                title: video.title
             });
 
-            const card = createVideoCard({
-                videoUrl: data.publicUrl,
-                title: video.title,
-                author: video.user_id,
-                views: '0 views',
-                timestamp: new Date(video.created_at).toLocaleDateString()
-            });
+            const card = document.createElement('div');
+            card.className = 'video-card';
+            card.innerHTML = `
+                <video controls>
+                    <source src="${data.publicUrl}" type="video/mp4">
+                    Your browser does not support the video tag.
+                </video>
+                <div class="video-info">
+                    <h3>${video.title}</h3>
+                    <p>${video.user_id}</p>
+                    <p>${video.views || 0} views • ${new Date(video.created_at).toLocaleDateString()}</p>
+                </div>
+            `;
+
             videoGrid.appendChild(card);
         }
     }
 
-    // Remove the duplicate createVideoCard function and keep only this one
+    // Remove all duplicate code below this point
     function createVideoCard(video) {
         const card = document.createElement('div');
         card.className = 'video-card';
