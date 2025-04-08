@@ -4,20 +4,19 @@
     <title>Authentication Callback</title>
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
     <script>
-        // Initialize Supabase client
-        const SUPABASE_URL = 'https://ootpttzhiyhhyayiydup.supabase.co';
-        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9vdHB0dHpoaXloaHlheWl5ZHVwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQwODgwMzksImV4cCI6MjA1OTY2NDAzOX0.6B_mXkRQaROBMHod3z25PX8ouCJVHXpfdAkBCpUH5ls';
-        
-        // Create Supabase client using the global createClient function
-        const { createClient } = supabase;
-        const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
         window.onload = async function() {
-            // Get the hash parameters from the URL
-            const hashParams = new URLSearchParams(window.location.hash.substring(1));
-            
-            if (hashParams.has('access_token')) {
-                try {
+            try {
+                // Initialize Supabase client
+                const SUPABASE_URL = 'https://ootpttzhiyhhyayiydup.supabase.co';
+                const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9vdHB0dHpoaXloaHlheWl5ZHVwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQwODgwMzksImV4cCI6MjA1OTY2NDAzOX0.6B_mXkRQaROBMHod3z25PX8ouCJVHXpfdAkBCpUH5ls';
+                
+                const { createClient } = window.supabase;
+                const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+                // Get the hash parameters from the URL
+                const hashParams = new URLSearchParams(window.location.hash.substring(1));
+                
+                if (hashParams.has('access_token')) {
                     // Set the session
                     const { data, error } = await supabaseClient.auth.setSession({
                         access_token: hashParams.get('access_token'),
@@ -25,15 +24,20 @@
                     });
 
                     if (error) throw error;
-                    console.log('Session set successfully');
+                    console.log('Session set successfully', data);
                     
-                } catch (error) {
-                    console.error('Error setting session:', error);
+                    // Store the session in localStorage
+                    localStorage.setItem('supabase.auth.token', JSON.stringify({
+                        access_token: hashParams.get('access_token'),
+                        refresh_token: hashParams.get('refresh_token')
+                    }));
                 }
+            } catch (error) {
+                console.error('Error in callback:', error);
+            } finally {
+                // Redirect back to main page
+                window.location.href = 'https://batman1190.github.io/ramdor';
             }
-            
-            // Redirect back to main page
-            window.location.href = 'https://batman1190.github.io/ramdor';
         }
     </script>
 </head>
