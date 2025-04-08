@@ -26,9 +26,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Update login handler to use currentUser
     // Login/Logout handling
+    // Update login handler
     loginBtn.addEventListener('click', async () => {
         try {
-            console.log('Login button clicked');
             if (!window.supabaseClient) {
                 console.error('Supabase not initialized');
                 return;
@@ -39,19 +39,22 @@ document.addEventListener('DOMContentLoaded', async () => {
                 await window.supabaseClient.auth.signOut();
                 window.location.reload();
             } else {
-                console.log('Starting Google sign in...');
-                const { data, error } = await window.supabaseClient.auth.signInWithOAuth({
-                    provider: 'google',
-                    options: {
-                        redirectTo: 'https://batman1190.github.io/ramdor/callback.html',
-                        queryParams: {
-                            access_type: 'offline',
-                            prompt: 'consent'
-                        }
-                    }
-                });
+                // Add helpful message for non-Gmail users
+                const useGoogle = confirm('This app uses Google Sign In. If you don\'t have a Google account, you can create one with your existing email address. Would you like to continue?');
                 
-                console.log('Immediate response:', { data, error });
+                if (useGoogle) {
+                    console.log('Starting Google sign in...');
+                    const { data, error } = await window.supabaseClient.auth.signInWithOAuth({
+                        provider: 'google',
+                        options: {
+                            redirectTo: 'https://batman1190.github.io/ramdor/callback.html',
+                            queryParams: {
+                                access_type: 'offline',
+                                prompt: 'consent'
+                            }
+                        }
+                    });
+                }
             }
         } catch (err) {
             console.error('Login error:', err);
