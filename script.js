@@ -123,7 +123,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Load videos from Supabase
     async function loadVideos() {
-        const { data: videos, error } = await supabase
+        const { data: videos, error } = await window.supabaseClient
             .from('videos')
             .select('*')
             .order('created_at', { ascending: false });
@@ -140,14 +140,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             const card = createVideoCard({
                 thumbnail: `${SUPABASE_URL}/storage/v1/object/public/videos/${video.url}`,
                 title: video.title,
-                author: video.user_id, // You might want to fetch user details separately
-                views: '0 views', // Implement view counting if needed
+                author: video.user_id,
+                views: '0 views',
                 timestamp: new Date(video.created_at).toLocaleDateString()
             });
             videoGrid.appendChild(card);
         });
     }
 
+    // Remove the sample video data and grid population
+    // since we're loading real data from Supabase
     // Initial video load
     loadVideos();
 
