@@ -2,13 +2,34 @@
 <html>
 <head>
     <title>Authentication Callback</title>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
     <script>
-        window.onload = function() {
+        window.onload = async function() {
+            // Get the hash parameters from the URL
+            const hashParams = new URLSearchParams(window.location.hash.substring(1));
+            
+            if (hashParams.has('access_token')) {
+                try {
+                    // Initialize Supabase client
+                    const supabase = window.supabaseClient;
+                    
+                    // Set the session in localStorage
+                    const session = {
+                        access_token: hashParams.get('access_token'),
+                        refresh_token: hashParams.get('refresh_token')
+                    };
+                    localStorage.setItem('supabase.auth.token', JSON.stringify(session));
+                } catch (error) {
+                    console.error('Error setting session:', error);
+                }
+            }
+            
+            // Redirect back to main page
             window.location.href = 'https://batman1190.github.io/ramdor';
         }
     </script>
 </head>
 <body>
-    <p>Redirecting...</p>
+    <p>Completing sign in...</p>
 </body>
 </html>
