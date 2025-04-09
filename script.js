@@ -450,31 +450,43 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!video || !video.id) return;
 
         try {
-            // Simple update query without any joins or complex selects
-            const { error } = await window.supabaseClient
-                .from('videos')
-                .update({
-                    views: (video.views || 0) + 1
-                })
-                .eq('id', video.id);
+            // Update view count with a direct increment in SQL
+            const { data: updateData, error: updateError } = await window.supabaseClient
+                .rpc('increment_views', {
+                    video_id: video.id
+                });
 
-            if (error) {
-                console.error('Error updating view count:', error);
+            if (updateError) {
+                console.error('Error updating view count:', updateError);
                 return;
             }
 
-            // Update local state and UI
-            video.views = (video.views || 0) + 1;
+            // Get the updated view count
+            const { data: currentData, error: getError } = await window.supabaseClient
+                .from('videos')
+                .select('views')
+                .eq('id', video.id)
+                .single();
+
+            if (getError) {
+                console.error('Error getting updated view count:', getError);
+                return;
+            }
+
+            const newViews = currentData.views;
+
+            // Update the UI
             if (viewCountElement) {
-                viewCountElement.innerHTML = `<i class="fas fa-eye"></i> ${video.views} views`;
+                viewCountElement.innerHTML = `<i class="fas fa-eye"></i> ${newViews} views`;
                 // Update the video card's data attribute
                 const videoCard = viewCountElement.closest('.video-card');
                 if (videoCard) {
-                    videoCard.setAttribute('data-views', video.views);
+                    videoCard.setAttribute('data-views', newViews);
                 }
             }
-
-            console.log(`Updated view count for video ${video.id} to ${video.views}`);
+            // Update the video object to maintain state
+            video.views = newViews;
+            console.log(`Updated view count for video ${video.id}: ${newViews}`);
 
         } catch (err) {
             console.error('Error in incrementViewCount:', err);
@@ -483,13 +495,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Modify the video event listener for better view counting
     function addViewCountListener(videoElement, video, viewCountElement) {
-        // Initialize views if not set
-        if (typeof video.views === 'undefined' || video.views === null) {
-            video.views = 0;
-        }
-        
         let viewCounted = false;
-        
+
         videoElement.addEventListener('play', () => {
             if (!viewCounted) {
                 viewCounted = true;
@@ -497,10 +504,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         });
 
+        // Reset view counted flag when video ends
         videoElement.addEventListener('ended', () => {
             viewCounted = false;
         });
 
+        // Reset view counted flag when video is seeked to beginning
         videoElement.addEventListener('seeked', () => {
             if (videoElement.currentTime === 0) {
                 viewCounted = false;
