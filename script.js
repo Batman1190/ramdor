@@ -482,20 +482,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         const videoGrid = document.querySelector('.video-grid');
         videoGrid.innerHTML = '';
 
-        // Filter out test videos with specific characteristics
-        videos = videos.filter(video => {
-            const isTestVideo = video.title === 'Test Video 1' || video.title === 'Test Video 2';
-            const hasNullUser = !video.user_id || video.user_id === 'null';
-            const hasFutureDate = new Date(video.created_at) > new Date();
-            
-            // Log problematic entries for debugging
-            if (isTestVideo || hasNullUser || hasFutureDate) {
-                console.log('Filtering out problematic video:', video);
-                return false;
-            }
-            return true;
-        });
-
         if (!videos || videos.length === 0) {
             videoGrid.innerHTML = `
                 <div class="no-videos">
@@ -506,37 +492,40 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
+        // Array to store videos that need to be deleted
+        const videosToDelete = [];
+
         for (const video of videos) {
             try {
+                // Check if video URL exists and is accessible
+                if (!video.url) {
+                    console.log('Video has no URL, marking for deletion:', video.id);
+                    videosToDelete.push(video.id);
+                    continue;
+                }
+
+                // Try to get the public URL
+                const { data } = window.supabaseClient.storage
+                    .from('videos')
+                    .getPublicUrl(video.url);
+
+                // Check if the file is accessible
+                try {
+                    const response = await fetch(data.publicUrl, { method: 'HEAD' });
+                    if (!response.ok) {
+                        console.log('Video file not accessible, marking for deletion:', video.id);
+                        videosToDelete.push(video.id);
+                        continue;
+                    }
+                } catch (fetchErr) {
+                    console.log('Error accessing video file, marking for deletion:', video.id);
+                    videosToDelete.push(video.id);
+                    continue;
+                }
+
+                // Only create and display card for valid videos
                 const card = document.createElement('div');
                 card.className = 'video-card';
-                
-                // Check if the video URL is valid
-                let isValidVideo = true;
-                let isImage = false;
-                let publicUrl = '';
-                
-                try {
-                    const { data } = window.supabaseClient.storage
-                        .from('videos')
-                        .getPublicUrl(video.url);
-                    publicUrl = data.publicUrl;
-
-                    // Try to determine if it's an image
-                    if (video.url.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
-                        isImage = true;
-                        isValidVideo = false;
-                    } else {
-                        // Check if it's a valid video
-                        const response = await fetch(data.publicUrl, { method: 'HEAD' });
-                        if (!response.ok) {
-                            throw new Error('Content not accessible');
-                        }
-                    }
-                } catch (urlErr) {
-                    console.error('Error getting content URL:', urlErr);
-                    isValidVideo = false;
-                }
 
                 // Show controls only for signed-in users
                 const userControls = `
@@ -561,22 +550,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <div class="video-header">
                         ${userControls}
                     </div>
-                    ${isValidVideo ? `
-                        <video controls width="100%" height="auto" preload="metadata">
-                            <source src="${publicUrl}" type="video/mp4">
-                            Your browser does not support the video tag.
-                        </video>
-                    ` : `
-                        <div class="invalid-video">
-                            <i class="fas fa-exclamation-triangle"></i>
-                            <p>No video with supported format and MIME type found.</p>
-                            ${currentUser && currentUser.id === video.user_id ? `
-                                <button class="delete-btn" title="Delete video" data-video-id="${video.id}">
-                                    <i class="fas fa-trash"></i> Delete this video
-                                </button>
-                            ` : ''}
-                        </div>
-                    `}
+                    <video controls width="100%" height="auto" preload="metadata">
+                        <source src="${data.publicUrl}" type="video/mp4">
+                        Your browser does not support the video tag.
+                    </video>
                     <div class="video-info">
                         <h3>${video.title || 'Untitled Entry'}</h3>
                         <div class="description-container">
@@ -593,249 +570,83 @@ document.addEventListener('DOMContentLoaded', async () => {
                     </div>
                 `;
 
-                // Add edit functionality
-                const editBtn = card.querySelector('.edit-btn, .edit-description-btn');
-                if (editBtn && currentUser && currentUser.id === video.user_id) {
-                    editBtn.addEventListener('click', async (e) => {
-                        e.preventDefault();
-                        const modal = document.createElement('div');
-                        modal.className = 'modal';
-                        modal.innerHTML = `
-                            <div class="modal-content">
-                                <h2>Edit Video Details</h2>
-                                <form id="edit-form">
-                                    <div class="form-group">
-                                        <label for="video-title">Title</label>
-                                        <input type="text" id="video-title" value="${video.title || ''}" placeholder="Video title" required>
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="video-description">Description (max 1000 characters)</label>
-                                        <textarea id="video-description" placeholder="Add a description" rows="4" maxlength="1000">${video.description || ''}</textarea>
-                                        <div class="char-counter"><span id="char-count">0</span>/1000 characters</div>
-                                    </div>
-                                    <div class="modal-buttons">
-                                        <button type="submit" class="save-btn">Save Changes</button>
-                                        <button type="button" class="cancel">Cancel</button>
-                                    </div>
-                                </form>
-                            </div>
-                        `;
-                        document.body.appendChild(modal);
-
-                        // Add character counter functionality
-                        const textarea = modal.querySelector('#video-description');
-                        const charCount = modal.querySelector('#char-count');
-                        charCount.textContent = textarea.value.length;
-
-                        textarea.addEventListener('input', () => {
-                            const length = textarea.value.length;
-                            charCount.textContent = length;
-                            if (length >= 1000) {
-                                charCount.style.color = 'red';
-                            } else {
-                                charCount.style.color = '';
-                            }
-                        });
-
-                        const form = modal.querySelector('#edit-form');
-                        form.addEventListener('submit', async (e) => {
-                            e.preventDefault();
-                            const newTitle = form.querySelector('#video-title').value.trim();
-                            const newDescription = form.querySelector('#video-description').value.trim();
-
-                            try {
-                                showLoading(true);
-                                const videoId = video.id;
-                                console.log('Starting video update:', { 
-                                    videoId, 
-                                    newTitle, 
-                                    newDescription
-                                });
-
-                                // Use RPC to update the video
-                                const { data: updateResult, error: updateError } = await window.supabaseClient
-                                    .rpc('update_video_details', {
-                                        p_video_id: videoId,
-                                        p_title: newTitle || 'Untitled Entry',
-                                        p_description: newDescription || ''
-                                    });
-
-                                if (updateError) {
-                                    console.error('Error updating video:', updateError);
-                                    throw updateError;
-                                }
-
-                                console.log('Update result:', updateResult);
-
-                                // Fetch the updated video data
-                                const { data: updatedVideo, error: fetchError } = await window.supabaseClient
-                                    .from('videos')
-                                    .select('*')
-                                    .eq('id', videoId)
-                                    .single();
-
-                                if (fetchError) {
-                                    console.error('Error fetching updated video:', fetchError);
-                                    throw fetchError;
-                                }
-
-                                if (updatedVideo) {
-                                    // Update the video object
-                                    video.title = updatedVideo.title;
-                                    video.description = updatedVideo.description;
-                                    
-                                    // Update the UI
-                                    card.querySelector('h3').textContent = updatedVideo.title;
-                                    const descriptionElement = card.querySelector('.video-description');
-                                    if (descriptionElement) {
-                                        console.log('Updating description element with:', updatedVideo.description);
-                                        descriptionElement.textContent = updatedVideo.description || 'No description available';
-                                        
-                                        // Make sure the description container is visible
-                                        const descContainer = card.querySelector('.description-container');
-                                        if (descContainer) {
-                                            descContainer.style.display = 'block';
-                                        }
-                                    } else {
-                                        console.error('Description element not found in the card');
-                                    }
-                                    
-                                    modal.remove();
-                                    showError('Video details updated successfully');
-                                } else {
-                                    throw new Error('Could not fetch updated video data');
-                                }
-                            } catch (err) {
-                                console.error('Error in video update:', err);
-                                showError('Error updating video: ' + err.message);
-                            } finally {
-                                showLoading(false);
-                            }
-                        });
-
-                        modal.querySelector('.cancel').addEventListener('click', () => modal.remove());
-                        modal.addEventListener('click', (e) => {
-                            if (e.target === modal) modal.remove();
-                        });
-                    });
-                }
-
-                // Add download functionality
-                const downloadBtn = card.querySelector('.download-btn');
-                if (downloadBtn && currentUser) {
-                    downloadBtn.addEventListener('click', async (e) => {
-                        e.preventDefault();
-                        try {
-                            showLoading(true);
-                            const response = await fetch(publicUrl);
-                            const blob = await response.blob();
-                            const url = window.URL.createObjectURL(blob);
-                            const a = document.createElement('a');
-                            a.href = url;
-                            a.download = video.title || 'video';
-                            document.body.appendChild(a);
-                            a.click();
-                            window.URL.revokeObjectURL(url);
-                            document.body.removeChild(a);
-                        } catch (err) {
-                            console.error('Error downloading video:', err);
-                            showError('Error downloading video: ' + err.message);
-                        } finally {
-                            showLoading(false);
-                        }
-                    });
-                }
-
-                // Add delete functionality
-                const deleteButtons = card.querySelectorAll('.delete-btn');
-                deleteButtons.forEach(deleteBtn => {
-                    deleteBtn.addEventListener('click', async (e) => {
-                        e.preventDefault();
-                        if (confirm('Are you sure you want to delete this video? This action cannot be undone.')) {
-                            const videoId = deleteBtn.dataset.videoId;
-                            const success = await deleteVideo(videoId);
-                            if (success) {
-                                // Remove the card from the DOM
-                                card.remove();
-                                // Force reload the current section
-                                const activeSection = document.querySelector('.sidebar-item.active span').textContent.toLowerCase();
-                                switch (activeSection) {
-                                    case 'home':
-                                        await loadHomeVideos();
-                                        break;
-                                    case 'explore':
-                                        await loadExploreVideos();
-                                        break;
-                                    case 'trending':
-                                        await loadTrendingVideos();
-                                        break;
-                                    case 'library':
-                                        await loadLibraryVideos();
-                                        break;
-                                }
-                            }
-                        }
-                    });
-                });
-
-                // Add view count tracking
-                const videoElement = card.querySelector('video');
-                if (videoElement) {
-                    let viewCounted = false;
-                    videoElement.addEventListener('play', async () => {
-                        if (!viewCounted) {
-                            try {
-                                // First update the view count directly
-                                const { error: updateError } = await window.supabaseClient.rpc(
-                                    'increment_view_count',
-                                    { video_id: video.id }
-                                );
-
-                                if (updateError) {
-                                    console.error('Error updating view count:', updateError);
-                                    return;
-                                }
-
-                                // Then get the updated count
-                                const { data: updatedVideo, error: getError } = await window.supabaseClient
-                                    .from('videos')
-                                    .select('views')
-                                    .eq('id', video.id)
-                                    .single();
-
-                                if (getError) {
-                                    console.error('Error getting updated view count:', getError);
-                                    return;
-                                }
-
-                                // Update UI
-                                if (updatedVideo) {
-                                    const viewCountElement = card.querySelector('.view-count');
-                                    if (viewCountElement) {
-                                        viewCountElement.textContent = updatedVideo.views;
-                                        video.views = updatedVideo.views;
-                                        console.log(`View count updated to ${updatedVideo.views}`);
-                                        viewCounted = true;
-                                    }
-                                }
-                            } catch (err) {
-                                console.error('Error in view count update:', err);
-                            }
-                        }
-                    });
-                }
-
-                // Initialize view count display
-                const viewCountElement = card.querySelector('.view-count');
-                if (viewCountElement) {
-                    viewCountElement.textContent = video.views || '0';
-                    console.log(`Initialized view count for ${video.title}: ${video.views || 0}`);
-                }
-
+                // Add event listeners and functionality
+                addCardEventListeners(card, video);
                 videoGrid.appendChild(card);
+
             } catch (err) {
                 console.error('Error displaying video:', err);
+                videosToDelete.push(video.id);
             }
+        }
+
+        // Delete invalid videos
+        if (videosToDelete.length > 0) {
+            console.log('Deleting invalid videos:', videosToDelete);
+            try {
+                // Delete from database
+                const { error: dbError } = await window.supabaseClient
+                    .from('videos')
+                    .delete()
+                    .in('id', videosToDelete);
+
+                if (dbError) {
+                    console.error('Error deleting invalid videos:', dbError);
+                } else {
+                    console.log('Successfully deleted invalid videos');
+                    // Reload the current section
+                    const activeSection = document.querySelector('.sidebar-item.active span').textContent.toLowerCase();
+                    switch (activeSection) {
+                        case 'home':
+                            await loadHomeVideos();
+                            break;
+                        case 'explore':
+                            await loadExploreVideos();
+                            break;
+                        case 'trending':
+                            await loadTrendingVideos();
+                            break;
+                        case 'library':
+                            await loadLibraryVideos();
+                            break;
+                    }
+                }
+            } catch (err) {
+                console.error('Error in bulk deletion:', err);
+            }
+        }
+    }
+
+    // Helper function to add event listeners to video cards
+    function addCardEventListeners(card, video) {
+        // Add edit functionality
+        const editBtn = card.querySelector('.edit-btn, .edit-description-btn');
+        if (editBtn && currentUser && currentUser.id === video.user_id) {
+            editBtn.addEventListener('click', (e) => handleEditClick(e, card, video));
+        }
+
+        // Add delete functionality
+        const deleteBtn = card.querySelector('.delete-btn');
+        if (deleteBtn) {
+            deleteBtn.addEventListener('click', (e) => handleDeleteClick(e, card, video));
+        }
+
+        // Add download functionality
+        const downloadBtn = card.querySelector('.download-btn');
+        if (downloadBtn && currentUser) {
+            downloadBtn.addEventListener('click', (e) => handleDownloadClick(e, video));
+        }
+
+        // Add view count tracking
+        const videoElement = card.querySelector('video');
+        if (videoElement) {
+            let viewCounted = false;
+            videoElement.addEventListener('play', () => {
+                if (!viewCounted) {
+                    handleViewCount(video, card);
+                    viewCounted = true;
+                }
+            });
         }
     }
 
