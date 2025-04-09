@@ -575,16 +575,31 @@ document.addEventListener('DOMContentLoaded', async () => {
                                     currentDescription: video.description 
                                 });
 
-                                // First update the video
+                                // First verify the video exists
+                                const { data: existingVideo, error: checkError } = await window.supabaseClient
+                                    .from('videos')
+                                    .select('*')
+                                    .eq('id', videoId)
+                                    .single();
+
+                                if (checkError) {
+                                    console.error('Error checking video:', checkError);
+                                    throw new Error('Could not verify video exists');
+                                }
+
+                                if (!existingVideo) {
+                                    throw new Error('Video not found');
+                                }
+
+                                // Then update the video
                                 const { data: updateResult, error: updateError } = await window.supabaseClient
                                     .from('videos')
                                     .update({ 
                                         title: newTitle || 'Untitled Entry',
-                                        description: newDescription
+                                        description: newDescription || ''
                                     })
                                     .eq('id', videoId)
-                                    .select()
-                                    .single();
+                                    .select();
 
                                 if (updateError) {
                                     console.error('Error updating video:', updateError);
@@ -593,17 +608,18 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                                 console.log('Update result:', updateResult);
 
-                                if (updateResult) {
+                                if (updateResult && updateResult.length > 0) {
+                                    const updatedVideo = updateResult[0];
                                     // Update the video object
-                                    video.title = updateResult.title;
-                                    video.description = updateResult.description;
+                                    video.title = updatedVideo.title;
+                                    video.description = updatedVideo.description;
                                     
                                     // Update the UI
-                                    card.querySelector('h3').textContent = updateResult.title;
+                                    card.querySelector('h3').textContent = updatedVideo.title;
                                     const descriptionElement = card.querySelector('.video-description');
                                     if (descriptionElement) {
-                                        console.log('Updating description element with:', updateResult.description);
-                                        descriptionElement.textContent = updateResult.description || 'No description available';
+                                        console.log('Updating description element with:', updatedVideo.description);
+                                        descriptionElement.textContent = updatedVideo.description || 'No description available';
                                     } else {
                                         console.error('Description element not found in the card');
                                     }
