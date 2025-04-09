@@ -657,25 +657,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     async function loadExploreVideos() {
         try {
-            const { data: videos, error } = await window.supabaseClient
-                .from('videos')
-                .select('*')
-                .not('user_id', 'is', null)
-                .lt('created_at', new Date().toISOString());
-            
-            if (error) throw error;
-            
-            // Filter out invalid videos
-            const validVideos = videos.filter(video => {
-                const isTestVideo = video.title === 'Test Video 1' || video.title === 'Test Video 2';
-                const hasNullUser = !video.user_id || video.user_id === 'null';
-                const hasFutureDate = new Date(video.created_at) > new Date();
-                
-                return !isTestVideo && !hasNullUser && !hasFutureDate;
-            });
+            // Use the same loadVideos function as home
+            const videos = await loadVideos('recent');
             
             // Shuffle the valid videos
-            const shuffledVideos = validVideos.sort(() => Math.random() - 0.5);
+            const shuffledVideos = videos.sort(() => Math.random() - 0.5);
             await displayVideos(shuffledVideos);
         } catch (err) {
             console.error('Error loading explore videos:', err);
@@ -686,30 +672,23 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     async function loadTrendingVideos() {
         try {
+            // First get all valid videos
+            const videos = await loadVideos('views');
+            
+            // Filter for last 7 days
             const sevenDaysAgo = new Date();
             sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
             
-            const { data: videos, error } = await window.supabaseClient
-                .from('videos')
-                .select('*')
-                .not('user_id', 'is', null)
-                .lt('created_at', new Date().toISOString())
-                .gte('created_at', sevenDaysAgo.toISOString())
-                .order('views', { ascending: false })
-                .limit(20);
-            
-            if (error) throw error;
+            const recentVideos = videos.filter(video => 
+                new Date(video.created_at) >= sevenDaysAgo
+            );
 
-            // Filter out invalid videos
-            const validVideos = videos.filter(video => {
-                const isTestVideo = video.title === 'Test Video 1' || video.title === 'Test Video 2';
-                const hasNullUser = !video.user_id || video.user_id === 'null';
-                const hasFutureDate = new Date(video.created_at) > new Date();
-                
-                return !isTestVideo && !hasNullUser && !hasFutureDate;
-            });
+            // Sort by views
+            const sortedVideos = recentVideos
+                .sort((a, b) => (parseInt(b.views) || 0) - (parseInt(a.views) || 0))
+                .slice(0, 20);
 
-            await displayVideos(validVideos);
+            await displayVideos(sortedVideos);
         } catch (err) {
             console.error('Error loading trending videos:', err);
             showError('Error loading trending videos');
@@ -725,26 +704,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         try {
-            const { data: videos, error } = await window.supabaseClient
-                .from('videos')
-                .select('*')
-                .eq('user_id', currentUser.id)
-                .not('user_id', 'is', null)
-                .lt('created_at', new Date().toISOString())
-                .order('created_at', { ascending: false });
+            // Use the same loadVideos function as home
+            const allVideos = await loadVideos('recent');
             
-            if (error) throw error;
+            // Filter for current user's videos
+            const userVideos = allVideos.filter(video => 
+                video.user_id === currentUser.id
+            );
 
-            // Filter out invalid videos
-            const validVideos = videos.filter(video => {
-                const isTestVideo = video.title === 'Test Video 1' || video.title === 'Test Video 2';
-                const hasNullUser = !video.user_id || video.user_id === 'null';
-                const hasFutureDate = new Date(video.created_at) > new Date();
-                
-                return !isTestVideo && !hasNullUser && !hasFutureDate;
-            });
-
-            await displayVideos(validVideos);
+            await displayVideos(userVideos);
         } catch (err) {
             console.error('Error loading library videos:', err);
             showError('Error loading library videos');
