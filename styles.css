@@ -1,3 +1,4 @@
+/* Root Variables */
 :root {
     --primary-color: #ff4d4d;
     --background-color: #0f0f0f;
@@ -25,8 +26,10 @@ body {
     background-color: var(--secondary-color);
     position: fixed;
     top: 0;
+    left: 0;
     width: 100%;
     z-index: 1000;
+    height: 70px;
 }
 
 .nav-left {
@@ -151,7 +154,10 @@ body {
 
 .content {
     display: flex;
-    margin-top: 70px;
+    padding-top: 70px;
+    min-height: 100vh;
+    position: relative;
+    background-color: var(--background-color);
 }
 
 .sidebar {
@@ -160,33 +166,50 @@ body {
     position: fixed;
     padding: 1rem;
     background-color: var(--secondary-color);
+    top: 70px;
+    left: 0;
+    z-index: 2;
+    overflow-y: auto;
 }
 
 .sidebar-item {
+    position: relative;
+    padding: 12px 20px;
+    margin-bottom: 5px;
+    cursor: pointer;
     display: flex;
     align-items: center;
-    gap: 1rem;
-    padding: 0.8rem;
-    border-radius: 10px;
-    cursor: pointer;
-    transition: background-color 0.3s;
+    gap: 12px;
+    border-radius: 8px;
+    color: var(--text-color);
+    background-color: transparent;
 }
 
 .sidebar-item:hover {
-    background-color: #ffffff1a;
+    background-color: rgba(255, 255, 255, 0.1);
 }
 
 .sidebar-item.active {
-    background-color: var(--primary-color);
+    background-color: rgba(255, 255, 255, 0.15);
+    font-weight: 500;
+}
+
+.sidebar-item i {
+    width: 24px;
+    text-align: center;
+    font-size: 18px;
 }
 
 .video-grid {
+    position: relative;
     margin-left: 240px;
     padding: 2rem;
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
     gap: 2rem;
-    width: 100%;
+    flex: 1;
+    background-color: var(--background-color);
+    z-index: 1;
 }
 
 .tiktok-style-feed {
@@ -283,4 +306,322 @@ body {
 
 #view-toggle i {
     pointer-events: none;
+}
+
+/* Loading Spinner */
+.upload-spinner {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.spinner {
+    width: 50px;
+    height: 50px;
+    border: 5px solid #f3f3f3;
+    border-top: 5px solid #3498db;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Error Messages */
+.error-message {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: #ff4444;
+    color: white;
+    padding: 15px 20px;
+    border-radius: 5px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+    z-index: 1000;
+    animation: slideIn 0.3s ease-out;
+}
+
+.error-message i {
+    font-size: 1.2em;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+/* Video Card Error State */
+.video-card .error-message {
+    position: relative;
+    top: 0;
+    right: 0;
+    width: 100%;
+    background: #f8f8f8;
+    color: #333;
+    text-align: center;
+    padding: 20px;
+    border-radius: 5px;
+    margin: 10px 0;
+}
+
+/* Sorting Controls */
+.sorting-controls {
+    margin-left: 20px;
+    display: flex;
+    align-items: center;
+}
+
+.sorting-controls select {
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background-color: white;
+    font-size: 14px;
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.sorting-controls select:hover {
+    border-color: #999;
+}
+
+.sorting-controls select:focus {
+    border-color: #3498db;
+}
+
+/* View Count Styles */
+.view-count {
+    font-weight: bold;
+    color: #666;
+}
+
+.video-info p {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    color: #666;
+    font-size: 0.9em;
+}
+
+/* Video Header and Delete Button */
+.video-header {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 2;
+    display: flex;
+    gap: 8px;
+}
+
+.delete-btn {
+    background-color: rgba(255, 0, 0, 0.8);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    opacity: 0;
+}
+
+.video-card {
+    position: relative;
+    border-radius: 10px;
+    overflow: hidden;
+    background-color: var(--secondary-color);
+    transition: transform 0.3s ease;
+}
+
+.video-card:hover .delete-btn {
+    opacity: 1;
+}
+
+.delete-btn:hover {
+    background-color: rgba(255, 0, 0, 1);
+    transform: scale(1.1);
+}
+
+.delete-btn i {
+    font-size: 16px;
+}
+
+/* Video Controls */
+.video-controls {
+    display: flex;
+    gap: 8px;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.video-card:hover .video-controls {
+    opacity: 1;
+}
+
+.edit-btn, .download-btn, .restore-btn {
+    background-color: rgba(255, 255, 255, 0.9);
+    color: #333;
+    border: none;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.edit-btn:hover {
+    background-color: #4CAF50;
+    color: white;
+    transform: scale(1.1);
+}
+
+.download-btn:hover {
+    background-color: #2196F3;
+    color: white;
+    transform: scale(1.1);
+}
+
+.restore-btn:hover {
+    background-color: #4CAF50;
+    color: white;
+    transform: scale(1.1);
+}
+
+/* Modal Styles */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    background-color: var(--secondary-color);
+    padding: 20px;
+    border-radius: 10px;
+    width: 90%;
+    max-width: 500px;
+}
+
+.modal-content h2 {
+    margin-bottom: 20px;
+    color: var(--text-color);
+}
+
+.modal-content input,
+.modal-content textarea {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 15px;
+    border: 1px solid #444;
+    border-radius: 5px;
+    background-color: #333;
+    color: var(--text-color);
+}
+
+.modal-content textarea {
+    height: 100px;
+    resize: vertical;
+}
+
+.modal-buttons {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+}
+
+.modal-buttons button {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.modal-buttons button[type="submit"] {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+.modal-buttons button.cancel {
+    background-color: #666;
+    color: white;
+}
+
+.modal-buttons button:hover {
+    transform: scale(1.05);
+}
+
+.no-videos {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    text-align: center;
+    color: var(--text-color);
+    opacity: 0.7;
+    grid-column: 1 / -1;
+    min-height: 200px;
+}
+
+.no-videos i {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+}
+
+.no-videos p {
+    font-size: 1.2rem;
+}
+
+.user-profile {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-right: 10px;
+}
+
+.user-name {
+    color: var(--text-color);
+    font-size: 14px;
+    display: none;
+}
+
+.profile-pic {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+    display: none;
 }

@@ -1,47 +1,63 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Authentication Callback</title>
-    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
         window.onload = async function() {
             try {
-                // Initialize Supabase client
                 const SUPABASE_URL = 'https://ootpttzhiyhhyayiydup.supabase.co';
                 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9vdHB0dHpoaXloaHlheWl5ZHVwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQwODgwMzksImV4cCI6MjA1OTY2NDAzOX0.6B_mXkRQaROBMHod3z25PX8ouCJVHXpfdAkBCpUH5ls';
                 
-                const { createClient } = window.supabase;
-                const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+                const supabaseClient = window.supabase.createClient(
+                    SUPABASE_URL,
+                    SUPABASE_ANON_KEY
+                );
 
                 // Get the hash parameters from the URL
                 const hashParams = new URLSearchParams(window.location.hash.substring(1));
                 
                 if (hashParams.has('access_token')) {
+                    // Set the session in localStorage
+                    const session = {
+                        access_token: hashParams.get('access_token'),
+                        refresh_token: hashParams.get('refresh_token'),
+                        expires_in: hashParams.get('expires_in'),
+                        provider_token: hashParams.get('provider_token'),
+                        provider_refresh_token: hashParams.get('provider_refresh_token')
+                    };
+
                     // Set the session
                     const { data, error } = await supabaseClient.auth.setSession({
-                        access_token: hashParams.get('access_token'),
-                        refresh_token: hashParams.get('refresh_token')
+                        access_token: session.access_token,
+                        refresh_token: session.refresh_token
                     });
 
                     if (error) throw error;
-                    console.log('Session set successfully', data);
+
+                    // Get user data
+                    const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
+                    if (userError) throw userError;
+
+                    // Store user data in localStorage
+                    localStorage.setItem('ramdor_user', JSON.stringify(user));
                     
-                    // Store the session in localStorage
-                    localStorage.setItem('supabase.auth.token', JSON.stringify({
-                        access_token: hashParams.get('access_token'),
-                        refresh_token: hashParams.get('refresh_token')
-                    }));
+                    console.log('Session set successfully', data);
                 }
             } catch (error) {
                 console.error('Error in callback:', error);
             } finally {
                 // Redirect back to main page
-                window.location.href = 'https://batman1190.github.io/ramdor';
+                window.location.href = '/ramdor/';
             }
         }
     </script>
 </head>
 <body>
-    <p>Completing sign in...</p>
+    <div class="loading-container">
+        <p>Completing sign in...</p>
+    </div>
 </body>
 </html>

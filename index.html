@@ -1,22 +1,23 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <!-- Add this line to include the Google Font -->
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ramdor – Your Story in Every Frame</title>
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Add these before your script.js -->
-    <!-- Replace the current Supabase scripts with these -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
         console.log('Initializing Supabase...');
         try {
+            const SUPABASE_URL = 'https://ootpttzhiyhhyayiydup.supabase.co';
+            const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9vdHB0dHpoaXloaHlheWl5ZHVwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQwODgwMzksImV4cCI6MjA1OTY2NDAzOX0.6B_mXkRQaROBMHod3z25PX8ouCJVHXpfdAkBCpUH5ls';
+            
             const supabaseClient = window.supabase.createClient(
-                'https://ootpttzhiyhhyayiydup.supabase.co',
-                'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9vdHB0dHpoaXloaHlheWl5ZHVwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQwODgwMzksImV4cCI6MjA1OTY2NDAzOX0.6B_mXkRQaROBMHod3z25PX8ouCJVHXpfdAkBCpUH5ls'
+                SUPABASE_URL,
+                SUPABASE_ANON_KEY
             );
             window.supabaseClient = supabaseClient;
             console.log('Testing auth:', !!supabaseClient.auth);
@@ -45,6 +46,10 @@
         </div>
         <div class="nav-right">
             <button class="upload-btn"><i class="fas fa-plus"></i> Create</button>
+            <div class="user-profile">
+                <span class="user-name"></span>
+                <img class="profile-pic" src="" alt="" style="display: none;">
+            </div>
             <button class="login-btn">Sign In</button>
         </div>
     </nav>
@@ -69,15 +74,21 @@
             </div>
         </div>
 
-        <div class="video-grid">
-            <!-- Video cards will be populated here -->
+        <div class="main-content">
+            <div class="sorting-controls">
+                <select id="sort-select">
+                    <option value="recent">Most Recent</option>
+                    <option value="views">Most Viewed</option>
+                </select>
+            </div>
+            <div class="video-grid">
+                <!-- Video cards will be populated here -->
+            </div>
         </div>
 
         <div class="tiktok-style-feed">
             <!-- Vertical scrolling content will be here -->
         </div>
     </main>
-    <!-- Remove this duplicate script tag -->
-    <!-- <script src="script.js"></script> -->
 </body>
 </html>
