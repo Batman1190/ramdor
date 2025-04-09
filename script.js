@@ -731,29 +731,36 @@ document.addEventListener('DOMContentLoaded', async () => {
                     });
                 }
 
-                // Add delete functionality for both regular and force-delete buttons
-                const deleteButtons = card.querySelectorAll('.delete-btn, .force-delete-btn');
+                // Add delete functionality
+                const deleteButtons = card.querySelectorAll('.delete-btn');
                 deleteButtons.forEach(deleteBtn => {
-                    if (deleteBtn) {
-                        deleteBtn.addEventListener('click', async (e) => {
-                            e.preventDefault();
-                            if (confirm('Are you sure you want to delete this entry? This action cannot be undone.')) {
-                                const videoId = deleteBtn.dataset.videoId;
-                                const forceDelete = deleteBtn.dataset.forceDelete === 'true';
-                                
-                                let success;
-                                if (forceDelete) {
-                                    success = await forceDeleteVideo(video);
-                                } else {
-                                    success = await deleteVideo(videoId);
-                                }
-                                
-                                if (success) {
-                                    card.remove();
+                    deleteBtn.addEventListener('click', async (e) => {
+                        e.preventDefault();
+                        if (confirm('Are you sure you want to delete this video? This action cannot be undone.')) {
+                            const videoId = deleteBtn.dataset.videoId;
+                            const success = await deleteVideo(videoId);
+                            if (success) {
+                                // Remove the card from the DOM
+                                card.remove();
+                                // Force reload the current section
+                                const activeSection = document.querySelector('.sidebar-item.active span').textContent.toLowerCase();
+                                switch (activeSection) {
+                                    case 'home':
+                                        await loadHomeVideos();
+                                        break;
+                                    case 'explore':
+                                        await loadExploreVideos();
+                                        break;
+                                    case 'trending':
+                                        await loadTrendingVideos();
+                                        break;
+                                    case 'library':
+                                        await loadLibraryVideos();
+                                        break;
                                 }
                             }
-                        });
-                    }
+                        }
+                    });
                 });
 
                 // Add view count tracking
@@ -974,11 +981,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (fetchError) throw fetchError;
 
             // Delete from storage first
-            const { error: storageError } = await window.supabaseClient.storage
-                .from('videos')
-                .remove([video.url]);
+            if (video.url) {
+                const { error: storageError } = await window.supabaseClient.storage
+                    .from('videos')
+                    .remove([video.url]);
 
-            if (storageError) throw storageError;
+                if (storageError) {
+                    console.error('Storage delete error:', storageError);
+                    // Continue even if storage delete fails
+                }
+            }
 
             // Then delete from database
             const { error: dbError } = await window.supabaseClient
@@ -987,6 +999,23 @@ document.addEventListener('DOMContentLoaded', async () => {
                 .eq('id', videoId);
 
             if (dbError) throw dbError;
+
+            // Force a complete reload of the current section
+            const activeSection = document.querySelector('.sidebar-item.active span').textContent.toLowerCase();
+            switch (activeSection) {
+                case 'home':
+                    await loadHomeVideos();
+                    break;
+                case 'explore':
+                    await loadExploreVideos();
+                    break;
+                case 'trending':
+                    await loadTrendingVideos();
+                    break;
+                case 'library':
+                    await loadLibraryVideos();
+                    break;
+            }
 
             showError('Video deleted successfully');
             return true;
