@@ -77,6 +77,37 @@ document.addEventListener('DOMContentLoaded', async () => {
             from { opacity: 0; }
             to { opacity: 1; }
         }
+
+        /* Updated description styles */
+        .description-container {
+            margin: 10px 0;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 4px;
+            max-height: none;
+            overflow: visible;
+        }
+
+        .video-description {
+            color: #ccc;
+            font-size: 0.9em;
+            line-height: 1.5;
+            white-space: pre-wrap;
+            word-break: break-word;
+            margin: 0;
+            max-height: none;
+            overflow: visible;
+        }
+
+        .video-info {
+            padding: 15px;
+        }
+
+        .video-info h3 {
+            margin: 0 0 10px 0;
+            font-size: 1.1em;
+            color: #fff;
+        }
     `;
     document.head.appendChild(style);
 
