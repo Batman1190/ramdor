@@ -108,6 +108,22 @@ document.addEventListener('DOMContentLoaded', async () => {
             font-size: 1.1em;
             color: #fff;
         }
+
+        .char-counter {
+            text-align: right;
+            font-size: 0.8em;
+            color: #666;
+            margin-top: 4px;
+        }
+        
+        #video-description {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            resize: vertical;
+            min-height: 100px;
+        }
     `;
     document.head.appendChild(style);
 
@@ -578,8 +594,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                                         <input type="text" id="video-title" value="${video.title || ''}" placeholder="Video title" required>
                                     </div>
                                     <div class="form-group">
-                                        <label for="video-description">Description</label>
-                                        <textarea id="video-description" placeholder="Add a description" rows="4">${video.description || ''}</textarea>
+                                        <label for="video-description">Description (max 1000 characters)</label>
+                                        <textarea id="video-description" placeholder="Add a description" rows="4" maxlength="1000">${video.description || ''}</textarea>
+                                        <div class="char-counter"><span id="char-count">0</span>/1000 characters</div>
                                     </div>
                                     <div class="modal-buttons">
                                         <button type="submit" class="save-btn">Save Changes</button>
@@ -589,6 +606,21 @@ document.addEventListener('DOMContentLoaded', async () => {
                             </div>
                         `;
                         document.body.appendChild(modal);
+
+                        // Add character counter functionality
+                        const textarea = modal.querySelector('#video-description');
+                        const charCount = modal.querySelector('#char-count');
+                        charCount.textContent = textarea.value.length;
+
+                        textarea.addEventListener('input', () => {
+                            const length = textarea.value.length;
+                            charCount.textContent = length;
+                            if (length >= 1000) {
+                                charCount.style.color = 'red';
+                            } else {
+                                charCount.style.color = '';
+                            }
+                        });
 
                         const form = modal.querySelector('#edit-form');
                         form.addEventListener('submit', async (e) => {
