@@ -54,75 +54,117 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Add styles for loading and placeholders
     const style = document.createElement('style');
     style.textContent = `
-        .loading-placeholder {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 200px;
-            color: var(--text-color);
-            gap: 1rem;
+        /* Base styles */
+        :root {
+            --header-height: 60px;
+            --sidebar-width: 240px;
+            --main-padding: 20px;
         }
-        .loading-placeholder i {
-            font-size: 2rem;
+
+        /* Main content positioning */
+        .main-content {
+            margin-left: var(--sidebar-width);
+            padding-top: var(--header-height);
+            min-height: 100vh;
+            position: relative;
+            z-index: 1;
         }
+
+        /* Sidebar positioning */
+        .sidebar {
+            position: fixed;
+            left: 0;
+            top: var(--header-height);
+            width: var(--sidebar-width);
+            height: calc(100vh - var(--header-height));
+            z-index: 2;
+            background: var(--background-color);
+        }
+
+        /* Video grid improvements */
         .video-grid {
-            min-height: 200px;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+            padding: var(--main-padding);
+            width: 100%;
+            max-width: 1600px;
+            margin: 0 auto;
         }
+
+        /* Video loading optimization */
+        .video-card video {
+            width: 100%;
+            height: auto;
+            max-height: 200px;
+            object-fit: cover;
+            background: #000;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            :root {
+                --sidebar-width: 0;
+                --main-padding: 10px;
+            }
+
+            .main-content {
+                margin-left: 0;
+                padding-top: calc(var(--header-height) + 10px);
+            }
+
+            .sidebar {
+                position: fixed;
+                left: -100%;
+                width: 80%;
+                max-width: 300px;
+                transition: left 0.3s ease;
+                box-shadow: 2px 0 5px rgba(0, 0, 0, 0.2);
+            }
+
+            .sidebar.active {
+                left: 0;
+            }
+
+            .video-grid {
+                grid-template-columns: 1fr;
+                gap: 15px;
+                padding: 10px;
+            }
+
+            .video-card {
+                margin-bottom: 15px;
+            }
+        }
+
+        /* Loading optimization */
         .video-card {
             opacity: 0;
             animation: fadeIn 0.3s ease-in forwards;
+            background: var(--background-color);
+            border-radius: 8px;
+            overflow: hidden;
         }
+
+        .video-placeholder {
+            width: 100%;
+            height: 200px;
+            background: rgba(0, 0, 0, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Prevent FOUC (Flash of Unstyled Content) */
+        .video-grid {
+            opacity: 0;
+            animation: fadeIn 0.3s ease-in forwards;
+            animation-delay: 0.1s;
+        }
+
         @keyframes fadeIn {
             from { opacity: 0; }
             to { opacity: 1; }
-        }
-
-        /* Updated description styles */
-        .description-container {
-            margin: 10px 0;
-            padding: 10px;
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 4px;
-            max-height: none;
-            overflow: visible;
-        }
-
-        .video-description {
-            color: #ccc;
-            font-size: 0.9em;
-            line-height: 1.5;
-            white-space: pre-wrap;
-            word-break: break-word;
-            margin: 0;
-            max-height: none;
-            overflow: visible;
-        }
-
-        .video-info {
-            padding: 15px;
-        }
-
-        .video-info h3 {
-            margin: 0 0 10px 0;
-            font-size: 1.1em;
-            color: #fff;
-        }
-
-        .char-counter {
-            text-align: right;
-            font-size: 0.8em;
-            color: #666;
-            margin-top: 4px;
-        }
-        
-        #video-description {
-            width: 100%;
-            padding: 8px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            resize: vertical;
-            min-height: 100px;
         }
     `;
     document.head.appendChild(style);
@@ -326,25 +368,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     // Video loading functions
-    async function loadVideos(sortBy = 'recent') {
+    async function loadVideos() {
         try {
             showLoading(true);
             
-            // Clear the video grid first
-            const videoGrid = document.querySelector('.video-grid');
-            videoGrid.innerHTML = `
-                <div class="loading-placeholder">
-                    <i class="fas fa-spinner fa-spin"></i>
-                    <p>Loading videos...</p>
-                </div>
-            `;
-
-            // Get all videos with their current view counts
+            // Get videos from database with strict filtering
             const { data: videos, error } = await window.supabaseClient
                 .from('videos')
-                .select('id, title, url, user_id, views, description, created_at')
+                .select('*, views')  // Explicitly include views
+                .not('url', 'is', null)
                 .not('user_id', 'is', null)
-                .lt('created_at', new Date().toISOString());
+                .order('created_at', { ascending: false });
 
             if (error) {
                 console.error('Error loading videos:', error);
@@ -352,73 +386,53 @@ document.addEventListener('DOMContentLoaded', async () => {
                 return [];
             }
 
-            console.log('Loaded videos from database:', videos);
-
-            // Check each video's existence and remove invalid ones
+            // Validate each video before returning
             const validVideos = [];
-            const deletionPromises = [];
-
             for (const video of videos) {
                 try {
-                    console.log('Processing video:', { 
-                        id: video.id, 
-                        title: video.title, 
-                        url: video.url 
-                    });
+                    // Basic validation
+                    if (!video || !video.id || !video.url || !video.user_id) {
+                        console.log('Invalid video data:', video);
+                        await forceDeleteVideo(video);
+                        continue;
+                    }
 
-                    // Try to get the file from storage
+                    // Check if video file exists in storage
                     const { data } = window.supabaseClient.storage
                         .from('videos')
                         .getPublicUrl(video.url);
 
-                    // Check if the file exists
+                    if (!data || !data.publicUrl) {
+                        console.log('Invalid video URL, deleting:', video.id);
+                        await forceDeleteVideo(video);
+                        continue;
+                    }
+
+                    // Verify file exists with HEAD request
                     try {
-                        const response = await fetch(data.publicUrl, { method: 'HEAD' });
-                        if (response.ok) {
-                            validVideos.push(video);
-                        } else {
-                            console.log('Video file not accessible, queuing for deletion:', video.id);
-                            // Queue the deletion
-                            deletionPromises.push(
-                                window.supabaseClient
-                                    .from('videos')
-                                    .delete()
-                                    .eq('id', video.id)
-                            );
+                        const response = await fetch(data.publicUrl, {
+                            method: 'HEAD',
+                            timeout: 3000
+                        });
+
+                        if (!response.ok) {
+                            console.log('Video file not accessible, deleting:', video.id);
+                            await forceDeleteVideo(video);
+                            continue;
                         }
+
+                        // If all checks pass, add to valid videos
+                        validVideos.push(video);
                     } catch (fetchErr) {
-                        console.log('Video file not accessible, queuing for deletion:', video.id);
-                        // Queue the deletion
-                        deletionPromises.push(
-                            window.supabaseClient
-                                .from('videos')
-                                .delete()
-                                .eq('id', video.id)
-                        );
+                        console.log('Error checking video file, deleting:', video.id);
+                        await forceDeleteVideo(video);
                     }
                 } catch (err) {
-                    console.log('Error checking video, queuing for deletion:', video.id);
-                    // Queue the deletion
-                    deletionPromises.push(
-                        window.supabaseClient
-                            .from('videos')
-                            .delete()
-                            .eq('id', video.id)
-                    );
+                    console.error('Error processing video:', err);
+                    if (video) {
+                        await forceDeleteVideo(video);
+                    }
                 }
-            }
-
-            // Execute all deletions in parallel
-            if (deletionPromises.length > 0) {
-                console.log(`Removing ${deletionPromises.length} invalid videos...`);
-                await Promise.all(deletionPromises);
-            }
-
-            // Apply sorting to valid videos
-            if (sortBy === 'views') {
-                validVideos.sort((a, b) => (parseInt(b.views) || 0) - (parseInt(a.views) || 0));
-            } else {
-                validVideos.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
             }
 
             return validVideos;
@@ -431,39 +445,49 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    // Function to update view count
+    // Update view count function to properly persist counts
     async function incrementViewCount(video, viewCountElement) {
+        if (!video || !video.id) return;
+
         try {
-            // Get current views from database
+            // First get the current view count from database
             const { data: currentData, error: getError } = await window.supabaseClient
                 .from('videos')
                 .select('views')
                 .eq('id', video.id)
-                .single();
+                .maybeSingle();
 
-            if (getError) throw getError;
+            if (getError) {
+                console.error('Error getting current view count:', getError);
+                return;
+            }
 
             // Calculate new view count
-            const currentViews = parseInt(currentData.views || 0);
+            const currentViews = parseInt(currentData?.views || 0);
             const newViews = currentViews + 1;
 
-            // Update view count in database
-            const { data: updateData, error: updateError } = await window.supabaseClient
+            // Update the database with new view count
+            const { error: updateError } = await window.supabaseClient
                 .from('videos')
                 .update({ views: newViews })
-                .eq('id', video.id)
-                .select()
-                .single();
+                .eq('id', video.id);
 
-            if (updateError) throw updateError;
-
-            // Update UI
-            if (viewCountElement && updateData) {
-                viewCountElement.textContent = updateData.views;
-                video.views = updateData.views;
+            if (updateError) {
+                console.error('Error updating view count:', updateError);
+                return;
             }
+
+            // Update the UI
+            if (viewCountElement) {
+                viewCountElement.innerHTML = `<i class="fas fa-eye"></i> ${newViews} views`;
+                // Update the video object to maintain state
+                video.views = newViews;
+            }
+
+            console.log(`Updated view count for video ${video.id}: ${newViews}`);
+
         } catch (err) {
-            console.error('Error updating view count:', err);
+            console.error('Error in incrementViewCount:', err);
         }
     }
 
@@ -480,9 +504,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     async function displayVideos(videos) {
         const videoGrid = document.querySelector('.video-grid');
+        if (!videoGrid) return;
+        
+        // Clear grid
         videoGrid.innerHTML = '';
 
-        if (!videos || videos.length === 0) {
+        if (!videos || !Array.isArray(videos) || videos.length === 0) {
             videoGrid.innerHTML = `
                 <div class="no-videos">
                     <i class="fas fa-video-slash"></i>
@@ -492,175 +519,215 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
-        // Array to store videos that need to be deleted
-        const videosToDelete = [];
-
         for (const video of videos) {
             try {
-                // Check if video URL exists and is accessible
-                if (!video.url) {
-                    console.log('Video has no URL, marking for deletion:', video.id);
-                    videosToDelete.push(video.id);
+                // Skip invalid videos
+                if (!video || !video.id || !video.url || !video.user_id) {
+                    console.log('Skipping invalid video:', video);
                     continue;
                 }
 
-                // Try to get the public URL
+                const card = document.createElement('div');
+                card.className = 'video-card';
+                card.setAttribute('data-video-id', video.id);
+                card.setAttribute('data-views', video.views || 0);
+
+                // Get video URL
                 const { data } = window.supabaseClient.storage
                     .from('videos')
                     .getPublicUrl(video.url);
 
-                // Check if the file is accessible
-                try {
-                    const response = await fetch(data.publicUrl, { method: 'HEAD' });
-                    if (!response.ok) {
-                        console.log('Video file not accessible, marking for deletion:', video.id);
-                        videosToDelete.push(video.id);
-                        continue;
-                    }
-                } catch (fetchErr) {
-                    console.log('Error accessing video file, marking for deletion:', video.id);
-                    videosToDelete.push(video.id);
+                if (!data || !data.publicUrl) {
+                    console.log('Invalid video URL for video:', video.id);
                     continue;
                 }
 
-                // Only create and display card for valid videos
-                const card = document.createElement('div');
-                card.className = 'video-card';
-
-                // Show controls only for signed-in users
-                const userControls = `
-                    <div class="video-controls">
-                        ${currentUser ? `
-                            ${currentUser.id === video.user_id ? `
-                                <button class="edit-btn" title="Edit video" data-video-id="${video.id}">
-                                    <i class="fas fa-edit"></i>
-                                </button>
-                                <button class="delete-btn" title="Delete video" data-video-id="${video.id}">
-                                    <i class="fas fa-trash"></i>
-                                </button>
-                            ` : ''}
-                            <button class="download-btn" title="Download video">
-                                <i class="fas fa-download"></i>
-                            </button>
-                        ` : ''}
-                    </div>
-                `;
-
+                // Create card content with view count
                 card.innerHTML = `
                     <div class="video-header">
-                        ${userControls}
+                        ${currentUser ? `
+                            <div class="video-controls">
+                                ${currentUser.id === video.user_id ? `
+                                    <button class="edit-btn" title="Edit video">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button class="delete-btn" title="Delete video">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                ` : ''}
+                                <button class="download-btn" title="Download video">
+                                    <i class="fas fa-download"></i>
+                                </button>
+                            </div>
+                        ` : ''}
                     </div>
-                    <video controls width="100%" height="auto" preload="metadata">
+                    <video controls preload="none">
                         <source src="${data.publicUrl}" type="video/mp4">
                         Your browser does not support the video tag.
                     </video>
                     <div class="video-info">
-                        <h3>${video.title || 'Untitled Entry'}</h3>
+                        <h3>${video.title || 'Untitled'}</h3>
                         <div class="description-container">
-                            <p class="video-description">${video.description || 'No description available'}</p>
+                            <p class="video-description">${video.description || ''}</p>
                         </div>
                         <div class="video-metadata">
-                            <p><span class="view-count">${video.views || 0}</span> views</p>
+                            <p class="view-count" data-video-id="${video.id}">
+                                <i class="fas fa-eye"></i> ${video.views || 0} views
+                            </p>
                             ${currentUser && currentUser.id === video.user_id ? `
-                                <button class="edit-description-btn" title="Edit description">
-                                    <i class="fas fa-edit"></i> Edit Details
+                                <button class="edit-description-btn">
+                                    <i class="fas fa-edit"></i>
+                                    Edit Details
                                 </button>
                             ` : ''}
                         </div>
                     </div>
                 `;
 
-                // Add event listeners and functionality
-                addCardEventListeners(card, video);
-                videoGrid.appendChild(card);
+                // Add event listeners
+                const videoElement = card.querySelector('video');
+                const viewCountElement = card.querySelector('.view-count');
 
-            } catch (err) {
-                console.error('Error displaying video:', err);
-                videosToDelete.push(video.id);
-            }
-        }
-
-        // Delete invalid videos
-        if (videosToDelete.length > 0) {
-            console.log('Deleting invalid videos:', videosToDelete);
-            try {
-                // Delete from database
-                const { error: dbError } = await window.supabaseClient
-                    .from('videos')
-                    .delete()
-                    .in('id', videosToDelete);
-
-                if (dbError) {
-                    console.error('Error deleting invalid videos:', dbError);
-                } else {
-                    console.log('Successfully deleted invalid videos');
-                    // Reload the current section
-                    const activeSection = document.querySelector('.sidebar-item.active span').textContent.toLowerCase();
-                    switch (activeSection) {
-                        case 'home':
-                            await loadHomeVideos();
-                            break;
-                        case 'explore':
-                            await loadExploreVideos();
-                            break;
-                        case 'trending':
-                            await loadTrendingVideos();
-                            break;
-                        case 'library':
-                            await loadLibraryVideos();
-                            break;
-                    }
+                // Add view count tracking with persistence
+                if (videoElement && viewCountElement) {
+                    let viewCounted = false;
+                    videoElement.addEventListener('play', () => {
+                        if (!viewCounted) {
+                            viewCounted = true;
+                            incrementViewCount(video, viewCountElement);
+                        }
+                    });
                 }
+
+                // Add edit functionality
+                const editBtn = card.querySelector('.edit-btn, .edit-description-btn');
+                if (editBtn && currentUser && currentUser.id === video.user_id) {
+                    editBtn.addEventListener('click', () => handleEditClick(video));
+                }
+
+                // Add delete functionality
+                const deleteBtn = card.querySelector('.delete-btn');
+                if (deleteBtn && currentUser && currentUser.id === video.user_id) {
+                    deleteBtn.addEventListener('click', () => handleDeleteClick(video));
+                }
+
+                // Add download functionality
+                const downloadBtn = card.querySelector('.download-btn');
+                if (downloadBtn && currentUser) {
+                    downloadBtn.addEventListener('click', () => handleDownloadClick(video));
+                }
+
+                videoGrid.appendChild(card);
             } catch (err) {
-                console.error('Error in bulk deletion:', err);
+                console.error('Error creating video card:', err, video);
             }
         }
     }
 
-    // Helper function to add event listeners to video cards
-    function addCardEventListeners(card, video) {
-        // Add edit functionality
-        const editBtn = card.querySelector('.edit-btn, .edit-description-btn');
-        if (editBtn && currentUser && currentUser.id === video.user_id) {
-            editBtn.addEventListener('click', (e) => handleEditClick(e, card, video));
-        }
+    // Handle edit click
+    async function handleEditClick(video) {
+        const modal = showModal(`
+            <div class="modal-content">
+                <h2>Edit Video Details</h2>
+                <div class="form-group">
+                    <label for="video-title">Title</label>
+                    <input type="text" id="video-title" value="${video.title || ''}" placeholder="Enter video title">
+                </div>
+                <div class="form-group">
+                    <label for="video-description">Description</label>
+                    <textarea id="video-description" placeholder="Enter video description">${video.description || ''}</textarea>
+                </div>
+                <div class="modal-buttons">
+                    <button type="submit" class="save-btn">Save Changes</button>
+                    <button class="cancel">Cancel</button>
+                </div>
+            </div>
+        `);
 
-        // Add delete functionality
-        const deleteBtn = card.querySelector('.delete-btn');
-        if (deleteBtn) {
-            deleteBtn.addEventListener('click', (e) => handleDeleteClick(e, card, video));
-        }
+        const form = modal.querySelector('.modal-content');
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const newTitle = form.querySelector('#video-title').value;
+            const newDescription = form.querySelector('#video-description').value;
 
-        // Add download functionality
-        const downloadBtn = card.querySelector('.download-btn');
-        if (downloadBtn && currentUser) {
-            downloadBtn.addEventListener('click', (e) => handleDownloadClick(e, video));
-        }
+            try {
+                showLoading(true);
+                const { error } = await window.supabaseClient
+                    .from('videos')
+                    .update({
+                        title: newTitle,
+                        description: newDescription
+                    })
+                    .eq('id', video.id);
 
-        // Add view count tracking
-        const videoElement = card.querySelector('video');
-        if (videoElement) {
-            let viewCounted = false;
-            videoElement.addEventListener('play', () => {
-                if (!viewCounted) {
-                    handleViewCount(video, card);
-                    viewCounted = true;
+                if (error) throw error;
+                
+                modal.remove();
+                showError('Video details updated successfully');
+                
+                // Refresh the current section
+                const activeSection = document.querySelector('.sidebar-item.active span').textContent.toLowerCase();
+                switch (activeSection) {
+                    case 'home':
+                        await loadHomeVideos();
+                        break;
+                    case 'explore':
+                        await loadExploreVideos();
+                        break;
+                    case 'trending':
+                        await loadTrendingVideos();
+                        break;
+                    case 'library':
+                        await loadLibraryVideos();
+                        break;
                 }
-            });
+            } catch (err) {
+                console.error('Error updating video:', err);
+                showError(`Error updating video: ${err.message}`);
+            } finally {
+                showLoading(false);
+            }
+        });
+
+        modal.querySelector('.cancel').addEventListener('click', () => modal.remove());
+    }
+
+    // Handle delete click
+    async function handleDeleteClick(video) {
+        if (confirm('Are you sure you want to delete this video?')) {
+            await deleteVideo(video.id);
         }
+    }
+
+    // Handle download click
+    function handleDownloadClick(video) {
+        const { data } = window.supabaseClient.storage
+            .from('videos')
+            .getPublicUrl(video.url);
+        
+        const a = document.createElement('a');
+        a.href = data.publicUrl;
+        a.download = video.title || 'video';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
     }
 
     async function loadHomeVideos() {
-        const videos = await loadVideos('recent');
-        await displayVideos(videos);
+        try {
+            const videos = await loadVideos();
+            if (Array.isArray(videos)) {
+                await displayVideos(videos);
+            }
+        } catch (err) {
+            console.error('Error in loadHomeVideos:', err);
+            showError('Error loading videos');
+        }
     }
 
     async function loadExploreVideos() {
         try {
-            // Use the same loadVideos function as home
-            const videos = await loadVideos('recent');
-            
-            // Shuffle the valid videos
+            const videos = await loadVideos();
             const shuffledVideos = videos.sort(() => Math.random() - 0.5);
             await displayVideos(shuffledVideos);
         } catch (err) {
@@ -672,8 +739,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     async function loadTrendingVideos() {
         try {
-            // First get all valid videos
-            const videos = await loadVideos('views');
+            const videos = await loadVideos();
             
             // Filter for last 7 days
             const sevenDaysAgo = new Date();
@@ -683,7 +749,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 new Date(video.created_at) >= sevenDaysAgo
             );
 
-            // Sort by views
+            // Sort by views and get top 20
             const sortedVideos = recentVideos
                 .sort((a, b) => (parseInt(b.views) || 0) - (parseInt(a.views) || 0))
                 .slice(0, 20);
@@ -704,14 +770,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         try {
-            // Use the same loadVideos function as home
-            const allVideos = await loadVideos('recent');
-            
-            // Filter for current user's videos
+            const allVideos = await loadVideos();
             const userVideos = allVideos.filter(video => 
                 video.user_id === currentUser.id
             );
-
             await displayVideos(userVideos);
         } catch (err) {
             console.error('Error loading library videos:', err);
@@ -758,6 +820,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     });
 
+    // Run cleanup before loading videos
+    await cleanupInvalidEntries();
+    
     // Initial load of home videos
     await loadHomeVideos();
 
@@ -822,78 +887,130 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
+    // Update forceDeleteVideo to be more thorough
     async function forceDeleteVideo(video) {
+        if (!video || !video.id) return false;
+
         try {
-            showLoading(true);
-            console.log('Attempting to force delete video:', video);
+            console.log('Force deleting video:', video.id);
             
-            // Delete from database first, without checking ownership
-            const { error: dbError } = await window.supabaseClient
-                .from('videos')
-                .delete()
-                .eq('id', video.id);
-
-            if (dbError) {
-                console.error('Database delete error:', dbError);
-                // If the database delete fails, try a more aggressive approach
-                try {
-                    const { error: fallbackError } = await window.supabaseClient.rpc('force_delete_video', {
-                        video_id: video.id
-                    });
-                    if (fallbackError) throw fallbackError;
-                } catch (fallbackErr) {
-                    console.error('Fallback delete error:', fallbackErr);
-                    throw fallbackErr;
-                }
-            }
-
-            // Try to delete from storage if URL exists
+            // Try to delete from storage first
             if (video.url) {
                 try {
                     await window.supabaseClient.storage
                         .from('videos')
                         .remove([video.url]);
                 } catch (storageErr) {
-                    console.error('Storage delete error:', storageErr);
-                    // Continue even if storage delete fails
+                    console.log('Storage delete error (continuing):', storageErr);
                 }
             }
 
-            showError('Video entry removed successfully');
+            // Delete from database with multiple fallback approaches
+            try {
+                // Try direct deletion first
+                const { error: directError } = await window.supabaseClient
+                    .from('videos')
+                    .delete()
+                    .eq('id', video.id);
+
+                if (directError) {
+                    // If direct deletion fails, try RPC method
+                    const { error: rpcError } = await window.supabaseClient.rpc('force_delete_video', {
+                        video_id: video.id
+                    });
+                    
+                    if (rpcError) {
+                        // Final attempt with force flag
+                        const { error: finalError } = await window.supabaseClient
+                            .from('videos')
+                            .delete()
+                            .eq('id', video.id)
+                            .throwOnError();
+                            
+                        if (finalError) throw finalError;
+                    }
+                }
+            } catch (dbErr) {
+                console.error('All deletion attempts failed for video:', video.id, dbErr);
+                // Try one last time with a raw delete
+                await window.supabaseClient
+                    .from('videos')
+                    .delete()
+                    .eq('id', video.id);
+            }
+
             return true;
         } catch (err) {
-            console.error('Error removing video entry:', err);
-            showError(`Error removing video entry: ${err.message}`);
+            console.error('Force delete failed for video:', video.id, err);
             return false;
-        } finally {
-            showLoading(false);
         }
     }
 
-    // Add a function to clean up invalid entries
+    // Update cleanupInvalidEntries to be more aggressive
     async function cleanupInvalidEntries() {
         try {
             const { data: videos, error } = await window.supabaseClient
                 .from('videos')
-                .select('*')
-                .eq('title', 'Test Video 1')
-                .or('title.eq.Test Video 2');
+                .select('*');
 
             if (error) throw error;
 
             if (videos && videos.length > 0) {
-                for (const video of videos) {
+                const invalidVideos = videos.filter(video => 
+                    !video || 
+                    !video.id || 
+                    !video.url || 
+                    !video.user_id ||
+                    video.title === 'Test Video 1' ||
+                    video.title === 'Test Video 2'
+                );
+
+                for (const video of invalidVideos) {
                     await forceDeleteVideo(video);
                 }
-                showError('Successfully cleaned up test videos');
-                await loadHomeVideos(); // Refresh the video list
+
+                if (invalidVideos.length > 0) {
+                    console.log(`Cleaned up ${invalidVideos.length} invalid videos`);
+                    await loadHomeVideos(); // Refresh the video list
+                }
             }
         } catch (err) {
-            console.error('Error cleaning up test videos:', err);
-            showError('Error cleaning up test videos');
+            console.error('Error cleaning up invalid videos:', err);
         }
     }
 
-    // Call cleanup on page load
-    cleanupInvalidEntries();
+    // Add mobile navigation toggle button
+    const mobileNavToggle = document.createElement('button');
+    mobileNavToggle.className = 'mobile-nav-toggle';
+    mobileNavToggle.innerHTML = '<i class="fas fa-bars"></i>';
+    document.body.insertBefore(mobileNavToggle, document.body.firstChild);
+
+    // Toggle sidebar on mobile
+    mobileNavToggle.addEventListener('click', () => {
+        const sidebar = document.querySelector('.sidebar');
+        sidebar.classList.toggle('active');
+        mobileNavToggle.innerHTML = sidebar.classList.contains('active') 
+            ? '<i class="fas fa-times"></i>' 
+            : '<i class="fas fa-bars"></i>';
+    });
+
+    // Close sidebar when clicking outside on mobile
+    document.addEventListener('click', (e) => {
+        const sidebar = document.querySelector('.sidebar');
+        const toggle = document.querySelector('.mobile-nav-toggle');
+        
+        if (sidebar.classList.contains('active') && 
+            !sidebar.contains(e.target) && 
+            !toggle.contains(e.target)) {
+            sidebar.classList.remove('active');
+            toggle.innerHTML = '<i class="fas fa-bars"></i>';
+        }
+    });
+
+    // Handle orientation change
+    window.addEventListener('orientationchange', () => {
+        const sidebar = document.querySelector('.sidebar');
+        sidebar.classList.remove('active');
+        mobileNavToggle.innerHTML = '<i class="fas fa-bars"></i>';
+    });
 });

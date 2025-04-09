@@ -354,7 +354,7 @@ body {
 }
 
 .error-message i {
-    font-size: 1.2em;
+    margin-right: 10px;
 }
 
 @keyframes slideIn {
@@ -370,42 +370,30 @@ body {
 
 /* Video Card Error State */
 .video-card .error-message {
-    position: relative;
-    top: 0;
-    right: 0;
-    width: 100%;
-    background: #f8f8f8;
-    color: #333;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: rgba(0, 0, 0, 0.8);
+    padding: 1rem;
+    border-radius: 8px;
     text-align: center;
-    padding: 20px;
-    border-radius: 5px;
-    margin: 10px 0;
+    width: 80%;
+    max-width: 300px;
+    z-index: 10;
 }
 
 /* Sorting Controls */
 .sorting-controls {
-    margin-left: 20px;
-    display: flex;
-    align-items: center;
 }
 
 .sorting-controls select {
-    padding: 8px 12px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    background-color: white;
-    font-size: 14px;
-    cursor: pointer;
-    outline: none;
-    transition: border-color 0.2s;
 }
 
 .sorting-controls select:hover {
-    border-color: #999;
 }
 
 .sorting-controls select:focus {
-    border-color: #3498db;
 }
 
 /* View Count Styles */
@@ -719,51 +707,60 @@ body {
     display: none;
 }
 
+/* Description Container */
 .description-container {
     margin: 10px 0;
-    padding: 10px;
+    padding: 15px;
     background: rgba(255, 255, 255, 0.05);
-    border-radius: 4px;
+    border-radius: 8px;
+    width: 100%;
 }
 
+/* Video Description */
 .video-description {
     color: #ccc;
     font-size: 0.9em;
-    line-height: 1.5;
+    line-height: 1.6;
     white-space: pre-wrap;
     word-break: break-word;
     margin: 0;
+    max-height: none;
+    overflow: visible;
 }
 
+/* Video Info Container */
 .video-info {
     padding: 15px;
+    background: var(--secondary-color);
 }
 
 .video-info h3 {
-    margin: 0 0 10px 0;
+    margin: 0 0 15px 0;
     font-size: 1.1em;
     color: #fff;
 }
 
+/* Video Metadata */
 .video-metadata {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-top: 10px;
-    padding-top: 10px;
+    margin-top: 15px;
+    padding-top: 15px;
     border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
+/* Edit Description Button */
 .edit-description-btn {
     background: none;
     border: 1px solid rgba(255, 255, 255, 0.2);
     color: #fff;
-    padding: 5px 10px;
+    padding: 8px 12px;
     border-radius: 4px;
     cursor: pointer;
     display: flex;
     align-items: center;
-    gap: 5px;
+    gap: 8px;
     font-size: 0.9em;
     transition: all 0.3s ease;
 }
@@ -771,4 +768,12 @@ body {
 .edit-description-btn:hover {
     background: rgba(255, 255, 255, 0.1);
     border-color: rgba(255, 255, 255, 0.3);
+}
+
+/* Remove all sorting controls */
+.sorting-controls,
+.sorting-controls select,
+.sorting-controls select:hover,
+.sorting-controls select:focus {
+    display: none;
 }
