@@ -826,12 +826,23 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
             const { data: videos, error } = await window.supabaseClient
                 .from('videos')
-                .select('*');
+                .select('*')
+                .not('user_id', 'is', null)
+                .lt('created_at', new Date().toISOString());
             
             if (error) throw error;
             
-            // Shuffle the videos
-            const shuffledVideos = videos.sort(() => Math.random() - 0.5);
+            // Filter out invalid videos
+            const validVideos = videos.filter(video => {
+                const isTestVideo = video.title === 'Test Video 1' || video.title === 'Test Video 2';
+                const hasNullUser = !video.user_id || video.user_id === 'null';
+                const hasFutureDate = new Date(video.created_at) > new Date();
+                
+                return !isTestVideo && !hasNullUser && !hasFutureDate;
+            });
+            
+            // Shuffle the valid videos
+            const shuffledVideos = validVideos.sort(() => Math.random() - 0.5);
             await displayVideos(shuffledVideos);
         } catch (err) {
             console.error('Error loading explore videos:', err);
@@ -848,12 +859,24 @@ document.addEventListener('DOMContentLoaded', async () => {
             const { data: videos, error } = await window.supabaseClient
                 .from('videos')
                 .select('*')
+                .not('user_id', 'is', null)
+                .lt('created_at', new Date().toISOString())
                 .gte('created_at', sevenDaysAgo.toISOString())
                 .order('views', { ascending: false })
                 .limit(20);
             
             if (error) throw error;
-            await displayVideos(videos);
+
+            // Filter out invalid videos
+            const validVideos = videos.filter(video => {
+                const isTestVideo = video.title === 'Test Video 1' || video.title === 'Test Video 2';
+                const hasNullUser = !video.user_id || video.user_id === 'null';
+                const hasFutureDate = new Date(video.created_at) > new Date();
+                
+                return !isTestVideo && !hasNullUser && !hasFutureDate;
+            });
+
+            await displayVideos(validVideos);
         } catch (err) {
             console.error('Error loading trending videos:', err);
             showError('Error loading trending videos');
@@ -873,10 +896,22 @@ document.addEventListener('DOMContentLoaded', async () => {
                 .from('videos')
                 .select('*')
                 .eq('user_id', currentUser.id)
+                .not('user_id', 'is', null)
+                .lt('created_at', new Date().toISOString())
                 .order('created_at', { ascending: false });
             
             if (error) throw error;
-            await displayVideos(videos);
+
+            // Filter out invalid videos
+            const validVideos = videos.filter(video => {
+                const isTestVideo = video.title === 'Test Video 1' || video.title === 'Test Video 2';
+                const hasNullUser = !video.user_id || video.user_id === 'null';
+                const hasFutureDate = new Date(video.created_at) > new Date();
+                
+                return !isTestVideo && !hasNullUser && !hasFutureDate;
+            });
+
+            await displayVideos(validVideos);
         } catch (err) {
             console.error('Error loading library videos:', err);
             showError('Error loading library videos');
