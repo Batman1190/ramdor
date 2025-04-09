@@ -571,35 +571,16 @@ document.addEventListener('DOMContentLoaded', async () => {
                                 console.log('Starting video update:', { 
                                     videoId, 
                                     newTitle, 
-                                    newDescription,
-                                    currentDescription: video.description 
+                                    newDescription
                                 });
 
-                                // First verify the video exists
-                                const { data: existingVideo, error: checkError } = await window.supabaseClient
-                                    .from('videos')
-                                    .select('*')
-                                    .eq('id', videoId)
-                                    .single();
-
-                                if (checkError) {
-                                    console.error('Error checking video:', checkError);
-                                    throw new Error('Could not verify video exists');
-                                }
-
-                                if (!existingVideo) {
-                                    throw new Error('Video not found');
-                                }
-
-                                // Then update the video
+                                // Use RPC to update the video
                                 const { data: updateResult, error: updateError } = await window.supabaseClient
-                                    .from('videos')
-                                    .update({ 
-                                        title: newTitle || 'Untitled Entry',
-                                        description: newDescription || ''
-                                    })
-                                    .eq('id', videoId)
-                                    .select();
+                                    .rpc('update_video_details', {
+                                        p_video_id: videoId,
+                                        p_title: newTitle || 'Untitled Entry',
+                                        p_description: newDescription || ''
+                                    });
 
                                 if (updateError) {
                                     console.error('Error updating video:', updateError);
@@ -608,8 +589,19 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                                 console.log('Update result:', updateResult);
 
-                                if (updateResult && updateResult.length > 0) {
-                                    const updatedVideo = updateResult[0];
+                                // Fetch the updated video data
+                                const { data: updatedVideo, error: fetchError } = await window.supabaseClient
+                                    .from('videos')
+                                    .select('*')
+                                    .eq('id', videoId)
+                                    .single();
+
+                                if (fetchError) {
+                                    console.error('Error fetching updated video:', fetchError);
+                                    throw fetchError;
+                                }
+
+                                if (updatedVideo) {
                                     // Update the video object
                                     video.title = updatedVideo.title;
                                     video.description = updatedVideo.description;
@@ -620,6 +612,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                                     if (descriptionElement) {
                                         console.log('Updating description element with:', updatedVideo.description);
                                         descriptionElement.textContent = updatedVideo.description || 'No description available';
+                                        
+                                        // Make sure the description container is visible
+                                        const descContainer = card.querySelector('.description-container');
+                                        if (descContainer) {
+                                            descContainer.style.display = 'block';
+                                        }
                                     } else {
                                         console.error('Description element not found in the card');
                                     }
@@ -627,7 +625,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                                     modal.remove();
                                     showError('Video details updated successfully');
                                 } else {
-                                    throw new Error('No data returned from update operation');
+                                    throw new Error('Could not fetch updated video data');
                                 }
                             } catch (err) {
                                 console.error('Error in video update:', err);
