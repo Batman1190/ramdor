@@ -295,7 +295,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             // Get all videos with their current view counts
             const { data: videos, error } = await window.supabaseClient
                 .from('videos')
-                .select('*')
+                .select('id, title, url, user_id, views, description, created_at')
                 .not('user_id', 'is', null)
                 .lt('created_at', new Date().toISOString());
 
@@ -305,10 +305,18 @@ document.addEventListener('DOMContentLoaded', async () => {
                 return [];
             }
 
+            console.log('Loaded videos from database:', videos);
+
             // Check each video's existence and initialize view count if needed
             const validVideos = [];
             for (const video of videos) {
                 try {
+                    console.log('Processing video:', { 
+                        id: video.id, 
+                        title: video.title, 
+                        description: video.description 
+                    });
+
                     // Ensure views is initialized
                     if (!video.views) {
                         const { data: updateData, error: updateError } = await window.supabaseClient
@@ -557,21 +565,31 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                             try {
                                 showLoading(true);
-                                const { error: updateError } = await window.supabaseClient
+                                console.log('Saving video details:', { id: video.id, title: newTitle, description: newDescription });
+                                
+                                const { data: updateData, error: updateError } = await window.supabaseClient
                                     .from('videos')
                                     .update({ 
                                         title: newTitle || 'Untitled Entry',
                                         description: newDescription
                                     })
-                                    .eq('id', video.id);
+                                    .eq('id', video.id)
+                                    .select('*')
+                                    .single();
 
-                                if (updateError) throw updateError;
+                                if (updateError) {
+                                    console.error('Error updating video:', updateError);
+                                    throw updateError;
+                                }
 
                                 // Update the card
-                                card.querySelector('h3').textContent = newTitle || 'Untitled Entry';
-                                card.querySelector('.video-description').textContent = newDescription || 'No description available';
-                                modal.remove();
-                                showError('Video details updated successfully');
+                                if (updateData) {
+                                    console.log('Successfully updated video:', updateData);
+                                    card.querySelector('h3').textContent = updateData.title;
+                                    card.querySelector('.video-description').textContent = updateData.description || 'No description available';
+                                    modal.remove();
+                                    showError('Video details updated successfully');
+                                }
                             } catch (err) {
                                 console.error('Error updating video:', err);
                                 showError('Error updating video: ' + err.message);
