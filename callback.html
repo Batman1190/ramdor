@@ -8,6 +8,7 @@
     <script>
         window.onload = async function() {
             try {
+                console.log('Callback page loaded');
                 const SUPABASE_URL = 'https://ootpttzhiyhhyayiydup.supabase.co';
                 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9vdHB0dHpoaXloaHlheWl5ZHVwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQwODgwMzksImV4cCI6MjA1OTY2NDAzOX0.6B_mXkRQaROBMHod3z25PX8ouCJVHXpfdAkBCpUH5ls';
                 
@@ -18,8 +19,10 @@
 
                 // Get the hash parameters from the URL
                 const hashParams = new URLSearchParams(window.location.hash.substring(1));
+                console.log('Hash params:', Object.fromEntries(hashParams));
                 
                 if (hashParams.has('access_token')) {
+                    console.log('Found access token');
                     // Set the session in localStorage
                     const session = {
                         access_token: hashParams.get('access_token'),
@@ -36,21 +39,23 @@
                     });
 
                     if (error) throw error;
+                    console.log('Session set successfully:', data);
 
                     // Get user data
                     const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
                     if (userError) throw userError;
+                    console.log('User data retrieved:', user);
 
                     // Store user data in localStorage
                     localStorage.setItem('ramdor_user', JSON.stringify(user));
-                    
-                    console.log('Session set successfully', data);
+                    console.log('User data stored in localStorage');
                 }
             } catch (error) {
                 console.error('Error in callback:', error);
             } finally {
                 // Redirect back to main page
-                window.location.href = '/ramdor/';
+                console.log('Redirecting to main page...');
+                window.location.href = 'https://batman1190.github.io/ramdor/';
             }
         }
     </script>

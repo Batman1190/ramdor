@@ -47,18 +47,24 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     try {
         // Check if user is logged in
+        console.log('Checking auth status...');
         const { data, error } = await window.supabaseClient.auth.getSession();
         currentUser = data?.session?.user;
+        console.log('Session data:', data);
 
         // If no session but we have stored user data, try to restore the session
         if (!currentUser) {
+            console.log('No active session, checking localStorage...');
             const storedUser = localStorage.getItem('ramdor_user');
             if (storedUser) {
+                console.log('Found stored user data');
                 currentUser = JSON.parse(storedUser);
+                console.log('Current user:', currentUser);
             }
         }
 
         if (currentUser) {
+            console.log('User is logged in:', currentUser);
             // Update login button and upload button
             loginBtn.textContent = 'Sign Out';
             uploadBtn.style.display = 'block';
@@ -67,24 +73,32 @@ document.addEventListener('DOMContentLoaded', async () => {
             const userNameElement = document.querySelector('.user-name');
             const profilePicElement = document.querySelector('.profile-pic');
 
+            console.log('User metadata:', currentUser.user_metadata);
             if (userNameElement) {
                 const displayName = currentUser.user_metadata?.full_name || 
                                   currentUser.user_metadata?.name ||
                                   currentUser.email?.split('@')[0] ||
                                   'User';
+                console.log('Setting display name:', displayName);
                 userNameElement.textContent = displayName;
                 userNameElement.style.display = 'block';
+            } else {
+                console.log('User name element not found');
             }
 
             if (profilePicElement) {
                 const avatarUrl = currentUser.user_metadata?.avatar_url ||
                                 currentUser.user_metadata?.picture;
+                console.log('Avatar URL:', avatarUrl);
                 if (avatarUrl) {
                     profilePicElement.src = avatarUrl;
                     profilePicElement.style.display = 'block';
                 }
+            } else {
+                console.log('Profile pic element not found');
             }
         } else {
+            console.log('User is not logged in');
             loginBtn.textContent = 'Sign In';
             uploadBtn.style.display = 'none';
 
