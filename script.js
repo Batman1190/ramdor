@@ -565,51 +565,55 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                             try {
                                 showLoading(true);
-                                console.log('Saving video details:', { id: video.id, title: newTitle, description: newDescription });
-                                
-                                // First verify the video exists
-                                const { data: existingVideo, error: checkError } = await window.supabaseClient
-                                    .from('videos')
-                                    .select('id')
-                                    .eq('id', video.id)
-                                    .single();
+                                const videoId = video.id;
+                                console.log('Attempting to update video:', { videoId, newTitle, newDescription });
 
-                                if (checkError || !existingVideo) {
-                                    console.error('Video not found:', checkError);
-                                    throw new Error('Video not found');
-                                }
-
-                                // Then update it
-                                const { data: updateData, error: updateError } = await window.supabaseClient
+                                // First update the video
+                                const { error: updateError } = await window.supabaseClient
                                     .from('videos')
                                     .update({ 
                                         title: newTitle || 'Untitled Entry',
                                         description: newDescription
                                     })
-                                    .eq('id', video.id)
-                                    .select()
-                                    .single();
+                                    .eq('id', videoId);
 
                                 if (updateError) {
                                     console.error('Error updating video:', updateError);
                                     throw updateError;
                                 }
 
-                                // Update the card
-                                if (updateData) {
-                                    console.log('Successfully updated video:', updateData);
-                                    video.title = updateData.title;
-                                    video.description = updateData.description;
+                                // Then fetch the updated data
+                                const { data: updatedVideo, error: fetchError } = await window.supabaseClient
+                                    .from('videos')
+                                    .select('*')
+                                    .eq('id', videoId)
+                                    .single();
+
+                                if (fetchError) {
+                                    console.error('Error fetching updated video:', fetchError);
+                                    throw fetchError;
+                                }
+
+                                if (updatedVideo) {
+                                    console.log('Successfully updated video:', updatedVideo);
+                                    // Update the video object
+                                    video.title = updatedVideo.title;
+                                    video.description = updatedVideo.description;
                                     
-                                    card.querySelector('h3').textContent = updateData.title;
-                                    card.querySelector('.video-description').textContent = updateData.description || 'No description available';
+                                    // Update the UI
+                                    card.querySelector('h3').textContent = updatedVideo.title;
+                                    const descriptionElement = card.querySelector('.video-description');
+                                    if (descriptionElement) {
+                                        descriptionElement.textContent = updatedVideo.description || 'No description available';
+                                    }
+                                    
                                     modal.remove();
                                     showError('Video details updated successfully');
                                 } else {
-                                    throw new Error('Failed to update video details');
+                                    throw new Error('Failed to retrieve updated video details');
                                 }
                             } catch (err) {
-                                console.error('Error updating video:', err);
+                                console.error('Error in video update:', err);
                                 showError('Error updating video: ' + err.message);
                             } finally {
                                 showLoading(false);
