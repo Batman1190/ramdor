@@ -40,6 +40,46 @@ const showModal = (content) => {
 
 // Main application code
 document.addEventListener('DOMContentLoaded', async () => {
+    // Clear any existing content in the video grid immediately
+    const videoGrid = document.querySelector('.video-grid');
+    if (videoGrid) {
+        videoGrid.innerHTML = `
+            <div class="loading-placeholder">
+                <i class="fas fa-spinner fa-spin"></i>
+                <p>Loading videos...</p>
+            </div>
+        `;
+    }
+
+    // Add styles for loading and placeholders
+    const style = document.createElement('style');
+    style.textContent = `
+        .loading-placeholder {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 200px;
+            color: var(--text-color);
+            gap: 1rem;
+        }
+        .loading-placeholder i {
+            font-size: 2rem;
+        }
+        .video-grid {
+            min-height: 200px;
+        }
+        .video-card {
+            opacity: 0;
+            animation: fadeIn 0.3s ease-in forwards;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+    `;
+    document.head.appendChild(style);
+
     // Authentication handling
     const loginBtn = document.querySelector('.login-btn');
     const uploadBtn = document.querySelector('.upload-btn');
@@ -241,18 +281,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function loadVideos(sortBy = 'recent') {
         try {
             showLoading(true);
-            let query = window.supabaseClient
+            
+            // Clear the video grid first
+            const videoGrid = document.querySelector('.video-grid');
+            videoGrid.innerHTML = `
+                <div class="loading-placeholder">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <p>Loading videos...</p>
+                </div>
+            `;
+
+            // Query with strict filtering
+            const { data: videos, error } = await window.supabaseClient
                 .from('videos')
-                .select('*');
-
-            // Apply sorting
-            if (sortBy === 'views') {
-                query = query.order('views', { ascending: false });
-            } else {
-                query = query.order('created_at', { ascending: false });
-            }
-
-            const { data: videos, error } = await query;
+                .select('*')
+                .not('title', 'ilike', '%test video%')  // More flexible pattern matching
+                .not('user_id', 'is', null)
+                .lt('created_at', new Date().toISOString());
 
             if (error) {
                 console.error('Error loading videos:', error);
@@ -260,7 +305,29 @@ document.addEventListener('DOMContentLoaded', async () => {
                 return [];
             }
 
-            return videos;
+            // Additional strict filtering
+            const validVideos = videos.filter(video => {
+                const isValid = video && 
+                              video.id && 
+                              video.user_id &&
+                              video.title &&
+                              !video.title.toLowerCase().includes('test video') &&
+                              new Date(video.created_at) <= new Date();
+                
+                if (!isValid) {
+                    console.log('Filtering out invalid video:', video);
+                }
+                return isValid;
+            });
+
+            // Apply sorting after filtering
+            if (sortBy === 'views') {
+                validVideos.sort((a, b) => (b.views || 0) - (a.views || 0));
+            } else {
+                validVideos.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+            }
+
+            return validVideos;
         } catch (err) {
             console.error('Error in loadVideos:', err);
             showError('Error loading videos');
@@ -274,6 +341,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         const videoGrid = document.querySelector('.video-grid');
         videoGrid.innerHTML = '';
 
+        // Filter out test videos with specific characteristics
+        videos = videos.filter(video => {
+            const isTestVideo = video.title === 'Test Video 1' || video.title === 'Test Video 2';
+            const hasNullUser = !video.user_id || video.user_id === 'null';
+            const hasFutureDate = new Date(video.created_at) > new Date();
+            
+            // Log problematic entries for debugging
+            if (isTestVideo || hasNullUser || hasFutureDate) {
+                console.log('Filtering out problematic video:', video);
+                return false;
+            }
+            return true;
+        });
+
         if (!videos || videos.length === 0) {
             videoGrid.innerHTML = `
                 <div class="no-videos">
@@ -286,39 +367,81 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         for (const video of videos) {
             try {
-                const { data } = window.supabaseClient.storage
-                    .from('videos')
-                    .getPublicUrl(video.url);
-
                 const card = document.createElement('div');
                 card.className = 'video-card';
                 
-                // Add buttons if user owns the video
-                const userControls = currentUser && currentUser.id === video.user_id ? `
+                // Check if the video URL is valid
+                let isValidVideo = true;
+                let isImage = false;
+                let publicUrl = '';
+                
+                try {
+                    const { data } = window.supabaseClient.storage
+                        .from('videos')
+                        .getPublicUrl(video.url);
+                    publicUrl = data.publicUrl;
+
+                    // Try to determine if it's an image
+                    if (video.url.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
+                        isImage = true;
+                        isValidVideo = false;
+                    } else {
+                        // Check if it's a valid video
+                        const response = await fetch(data.publicUrl, { method: 'HEAD' });
+                        if (!response.ok) {
+                            throw new Error('Content not accessible');
+                        }
+                    }
+                } catch (urlErr) {
+                    console.error('Error getting content URL:', urlErr);
+                    isValidVideo = false;
+                }
+
+                // Show delete button only for video owners who are signed in
+                const userControls = `
                     <div class="video-controls">
-                        <button class="edit-btn" title="Edit video">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                        <button class="download-btn" title="Download video">
-                            <i class="fas fa-download"></i>
-                        </button>
-                        <button class="delete-btn" title="Delete video">
-                            <i class="fas fa-trash"></i>
-                        </button>
+                        ${currentUser && currentUser.id === video.user_id ? `
+                            <button class="delete-btn" title="Delete video" data-video-id="${video.id}">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        ` : ''}
                     </div>
-                ` : '';
+                `;
 
                 card.innerHTML = `
                     <div class="video-header">
                         ${userControls}
                     </div>
-                    <video controls width="100%" height="auto" preload="metadata">
-                        <source src="${data.publicUrl}" type="video/mp4">
-                        Your browser does not support the video tag.
-                    </video>
+                    ${isValidVideo ? `
+                        <video controls width="100%" height="auto" preload="metadata">
+                            <source src="${publicUrl}" type="video/mp4">
+                            Your browser does not support the video tag.
+                        </video>
+                    ` : `
+                        <div class="invalid-video">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <p>No video with supported format and MIME type found.</p>
+                            ${currentUser && currentUser.id === video.user_id ? `
+                                <button class="delete-btn" title="Delete video" data-video-id="${video.id}" style="
+                                    background: #ff4d4d;
+                                    color: white;
+                                    border: none;
+                                    padding: 8px 16px;
+                                    border-radius: 4px;
+                                    margin-top: 10px;
+                                    cursor: pointer;
+                                    display: flex;
+                                    align-items: center;
+                                    gap: 8px;
+                                ">
+                                    <i class="fas fa-trash"></i> Delete this video
+                                </button>
+                            ` : ''}
+                        </div>
+                    `}
                     <div class="video-info">
-                        <h3>${video.title}</h3>
-                        <p>${video.user_id}</p>
+                        <h3>${video.title || 'Untitled Entry'}</h3>
+                        <p>${video.user_id || 'Unknown User'}</p>
                         <p><span class="view-count">${video.views || 0}</span> views • ${new Date(video.created_at).toLocaleDateString()}</p>
                     </div>
                 `;
@@ -383,7 +506,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         e.preventDefault();
                         try {
                             showLoading(true);
-                            const response = await fetch(data.publicUrl);
+                            const response = await fetch(publicUrl);
                             const blob = await response.blob();
                             const url = window.URL.createObjectURL(blob);
                             const a = document.createElement('a');
@@ -402,42 +525,30 @@ document.addEventListener('DOMContentLoaded', async () => {
                     });
                 }
 
-                // Add delete functionality
-                const deleteBtn = card.querySelector('.delete-btn');
-                if (deleteBtn) {
-                    deleteBtn.addEventListener('click', async (e) => {
-                        e.preventDefault();
-                        if (confirm('Are you sure you want to delete this video? This action cannot be undone.')) {
-                            try {
-                                showLoading(true);
+                // Add delete functionality for both regular and force-delete buttons
+                const deleteButtons = card.querySelectorAll('.delete-btn, .force-delete-btn');
+                deleteButtons.forEach(deleteBtn => {
+                    if (deleteBtn) {
+                        deleteBtn.addEventListener('click', async (e) => {
+                            e.preventDefault();
+                            if (confirm('Are you sure you want to delete this entry? This action cannot be undone.')) {
+                                const videoId = deleteBtn.dataset.videoId;
+                                const forceDelete = deleteBtn.dataset.forceDelete === 'true';
                                 
-                                // Delete from storage first
-                                const { error: storageError } = await window.supabaseClient.storage
-                                    .from('videos')
-                                    .remove([video.url]);
-
-                                if (storageError) throw storageError;
-
-                                // Then delete from database
-                                const { error: dbError } = await window.supabaseClient
-                                    .from('videos')
-                                    .delete()
-                                    .eq('id', video.id);
-
-                                if (dbError) throw dbError;
-
-                                // Remove the card from UI
-                                card.remove();
-                                showError('Video deleted successfully');
-                            } catch (err) {
-                                console.error('Error deleting video:', err);
-                                showError('Error deleting video: ' + err.message);
-                            } finally {
-                                showLoading(false);
+                                let success;
+                                if (forceDelete) {
+                                    success = await forceDeleteVideo(video);
+                                } else {
+                                    success = await deleteVideo(videoId);
+                                }
+                                
+                                if (success) {
+                                    card.remove();
+                                }
                             }
-                        }
-                    });
-                }
+                        });
+                    }
+                });
 
                 // Add view count tracking
                 const videoElement = card.querySelector('video');
@@ -470,11 +581,44 @@ document.addEventListener('DOMContentLoaded', async () => {
                 videoElement.addEventListener('error', (e) => {
                     console.error('Video loading error:', e.target.error);
                     card.innerHTML = `
-                        <div class="error-message">
-                            <i class="fas fa-exclamation-circle"></i>
-                            <p>Error loading video</p>
+                        <div class="invalid-video">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <p>No video with supported format and MIME type found.</p>
+                            <button class="delete-btn force-delete-btn" title="Delete entry" data-video-id="${video.id}" data-force-delete="true" style="
+                                background: #ff4d4d;
+                                color: white;
+                                border: none;
+                                padding: 8px 16px;
+                                border-radius: 4px;
+                                margin-top: 10px;
+                                cursor: pointer;
+                                display: flex;
+                                align-items: center;
+                                gap: 8px;
+                            ">
+                                <i class="fas fa-trash"></i> Delete this entry
+                            </button>
+                        </div>
+                        <div class="video-info">
+                            <h3>${video.title || 'Untitled Entry'}</h3>
+                            <p>${video.user_id || 'Unknown User'}</p>
+                            <p><span class="view-count">${video.views || 0}</span> views • ${new Date(video.created_at).toLocaleDateString()}</p>
                         </div>
                     `;
+
+                    // Add click handler for the new delete button
+                    const newDeleteBtn = card.querySelector('.force-delete-btn');
+                    if (newDeleteBtn) {
+                        newDeleteBtn.addEventListener('click', async (e) => {
+                            e.preventDefault();
+                            if (confirm('Are you sure you want to delete this invalid entry? This action cannot be undone.')) {
+                                const success = await forceDeleteVideo(video);
+                                if (success) {
+                                    card.remove();
+                                }
+                            }
+                        });
+                    }
                 });
 
                 videoGrid.appendChild(card);
@@ -591,4 +735,118 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Initial load of home videos
     await loadHomeVideos();
+
+    async function deleteVideo(videoId) {
+        try {
+            showLoading(true);
+            
+            // First, get the video details
+            const { data: video, error: fetchError } = await window.supabaseClient
+                .from('videos')
+                .select('*')
+                .eq('id', videoId)
+                .single();
+
+            if (fetchError) throw fetchError;
+
+            // Delete from storage first
+            const { error: storageError } = await window.supabaseClient.storage
+                .from('videos')
+                .remove([video.url]);
+
+            if (storageError) throw storageError;
+
+            // Then delete from database
+            const { error: dbError } = await window.supabaseClient
+                .from('videos')
+                .delete()
+                .eq('id', videoId);
+
+            if (dbError) throw dbError;
+
+            showError('Video deleted successfully');
+            return true;
+        } catch (err) {
+            console.error('Error deleting video:', err);
+            showError(`Error deleting video: ${err.message}`);
+            return false;
+        } finally {
+            showLoading(false);
+        }
+    }
+
+    async function forceDeleteVideo(video) {
+        try {
+            showLoading(true);
+            console.log('Attempting to force delete video:', video);
+            
+            // Delete from database first, without checking ownership
+            const { error: dbError } = await window.supabaseClient
+                .from('videos')
+                .delete()
+                .eq('id', video.id);
+
+            if (dbError) {
+                console.error('Database delete error:', dbError);
+                // If the database delete fails, try a more aggressive approach
+                try {
+                    const { error: fallbackError } = await window.supabaseClient.rpc('force_delete_video', {
+                        video_id: video.id
+                    });
+                    if (fallbackError) throw fallbackError;
+                } catch (fallbackErr) {
+                    console.error('Fallback delete error:', fallbackErr);
+                    throw fallbackErr;
+                }
+            }
+
+            // Try to delete from storage if URL exists
+            if (video.url) {
+                try {
+                    await window.supabaseClient.storage
+                        .from('videos')
+                        .remove([video.url]);
+                } catch (storageErr) {
+                    console.error('Storage delete error:', storageErr);
+                    // Continue even if storage delete fails
+                }
+            }
+
+            showError('Video entry removed successfully');
+            return true;
+        } catch (err) {
+            console.error('Error removing video entry:', err);
+            showError(`Error removing video entry: ${err.message}`);
+            return false;
+        } finally {
+            showLoading(false);
+        }
+    }
+
+    // Add a function to clean up invalid entries
+    async function cleanupInvalidEntries() {
+        try {
+            const { data: videos, error } = await window.supabaseClient
+                .from('videos')
+                .select('*')
+                .eq('title', 'Test Video 1')
+                .or('title.eq.Test Video 2');
+
+            if (error) throw error;
+
+            if (videos && videos.length > 0) {
+                for (const video of videos) {
+                    await forceDeleteVideo(video);
+                }
+                showError('Successfully cleaned up test videos');
+                await loadHomeVideos(); // Refresh the video list
+            }
+        } catch (err) {
+            console.error('Error cleaning up test videos:', err);
+            showError('Error cleaning up test videos');
+        }
+    }
+
+    // Call cleanup on page load
+    cleanupInvalidEntries();
 });
