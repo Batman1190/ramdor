@@ -354,52 +354,67 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             console.log('Loaded videos from database:', videos);
 
-            // Check each video's existence and initialize view count if needed
+            // Check each video's existence and remove invalid ones
             const validVideos = [];
+            const deletionPromises = [];
+
             for (const video of videos) {
                 try {
                     console.log('Processing video:', { 
                         id: video.id, 
                         title: video.title, 
-                        description: video.description 
+                        url: video.url 
                     });
-
-                    // Ensure views is initialized
-                    if (!video.views) {
-                        const { data: updateData, error: updateError } = await window.supabaseClient
-                            .from('videos')
-                            .update({ views: 0 })
-                            .eq('id', video.id)
-                            .select()
-                            .single();
-                            
-                        if (updateData) {
-                            video.views = 0;
-                        }
-                    }
 
                     // Try to get the file from storage
                     const { data } = window.supabaseClient.storage
                         .from('videos')
                         .getPublicUrl(video.url);
-                    
+
                     // Check if the file exists
-                    const response = await fetch(data.publicUrl, { method: 'HEAD' });
-                    if (response.ok) {
-                        validVideos.push(video);
-                    } else {
-                        console.log('Video file not found in storage, removing from database:', video.id);
-                        await window.supabaseClient
-                            .from('videos')
-                            .delete()
-                            .eq('id', video.id);
+                    try {
+                        const response = await fetch(data.publicUrl, { method: 'HEAD' });
+                        if (response.ok) {
+                            validVideos.push(video);
+                        } else {
+                            console.log('Video file not accessible, queuing for deletion:', video.id);
+                            // Queue the deletion
+                            deletionPromises.push(
+                                window.supabaseClient
+                                    .from('videos')
+                                    .delete()
+                                    .eq('id', video.id)
+                            );
+                        }
+                    } catch (fetchErr) {
+                        console.log('Video file not accessible, queuing for deletion:', video.id);
+                        // Queue the deletion
+                        deletionPromises.push(
+                            window.supabaseClient
+                                .from('videos')
+                                .delete()
+                                .eq('id', video.id)
+                        );
                     }
                 } catch (err) {
-                    console.log('Error checking video file:', err);
+                    console.log('Error checking video, queuing for deletion:', video.id);
+                    // Queue the deletion
+                    deletionPromises.push(
+                        window.supabaseClient
+                            .from('videos')
+                            .delete()
+                            .eq('id', video.id)
+                    );
                 }
             }
 
-            // Apply sorting
+            // Execute all deletions in parallel
+            if (deletionPromises.length > 0) {
+                console.log(`Removing ${deletionPromises.length} invalid videos...`);
+                await Promise.all(deletionPromises);
+            }
+
+            // Apply sorting to valid videos
             if (sortBy === 'views') {
                 validVideos.sort((a, b) => (parseInt(b.views) || 0) - (parseInt(a.views) || 0));
             } else {
