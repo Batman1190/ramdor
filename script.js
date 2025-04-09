@@ -288,7 +288,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    // Upload handling
+    // Add Bunny.net configuration
+    const BUNNY_API_KEY = '89052d93-35d8-42cb-961c-a68e6ff5623b';
+    const BUNNY_LIBRARY_ID = '407848';
+    const BUNNY_BASE_URL = 'https://video.bunnycdn.com/library';
+    const BUNNY_STREAM_URL = 'https://iframe.mediadelivery.net/play';
+
+    // Modify upload handling
     uploadBtn.addEventListener('click', async () => {
         if (!currentUser) {
             showError('Please sign in to upload videos');
@@ -322,38 +328,60 @@ document.addEventListener('DOMContentLoaded', async () => {
             
             try {
                 showLoading(true);
-                console.log('Uploading to storage...');
-                // Upload to Supabase Storage
-                const { data, error } = await window.supabaseClient.storage
-                    .from('videos')
-                    .upload(`${currentUser.id}/${fileName}`, file, {
-                        upsert: false
-                    });
+                
+                // Step 1: Create video in Bunny.net
+                const createResponse = await fetch(`${BUNNY_BASE_URL}/${BUNNY_LIBRARY_ID}/videos`, {
+                    method: 'POST',
+                    headers: {
+                        'AccessKey': BUNNY_API_KEY,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        title: fileName
+                    })
+                });
 
-                if (error) {
-                    console.error('Storage upload error:', error);
-                    showError(`Error uploading video: ${error.message}`);
-                    return;
+                if (!createResponse.ok) {
+                    throw new Error('Failed to create video in Bunny.net');
                 }
 
-                console.log('Storage upload successful, saving to database...');
-                const { data: videoData, error: dbError } = await window.supabaseClient
+                const videoData = await createResponse.json();
+                const videoId = videoData.guid;
+
+                // Step 2: Upload the video file
+                const uploadResponse = await fetch(`${BUNNY_BASE_URL}/${BUNNY_LIBRARY_ID}/videos/${videoId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'AccessKey': BUNNY_API_KEY
+                    },
+                    body: file
+                });
+
+                if (!uploadResponse.ok) {
+                    throw new Error('Failed to upload video to Bunny.net');
+                }
+
+                console.log('Video uploaded to Bunny.net successfully');
+
+                // Step 3: Save video metadata to Supabase
+                const { data: dbData, error: dbError } = await window.supabaseClient
                     .from('videos')
                     .insert([{
                         title: file.name,
-                        url: `${currentUser.id}/${fileName}`,
+                        url: videoId, // Store Bunny.net video ID instead of file path
                         user_id: currentUser.id,
                         views: 0,
-                        description: '' // Initialize with empty description
+                        description: '',
+                        bunny_id: videoId // Add a new field to store Bunny.net video ID
                     }])
                     .select();
-        
+
                 if (dbError) {
                     console.error('Database error:', dbError);
                     showError(`Error saving video metadata: ${dbError.message}`);
                     return;
                 }
-        
+
                 showError('Video uploaded successfully! You can now add a description by clicking the Edit Details button.');
                 loadVideos();
             } catch (err) {
@@ -517,6 +545,57 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
+    // Modify the video card creation to use the correct Bunny.net URL format
+    function createVideoCard(video, currentViews) {
+        const card = document.createElement('div');
+        card.className = 'video-card';
+        card.setAttribute('data-video-id', video.id);
+        card.setAttribute('data-views', currentViews);
+
+        card.innerHTML = `
+            <div class="video-header">
+                ${currentUser ? `
+                    <div class="video-controls">
+                        ${currentUser.id === video.user_id ? `
+                            <button class="edit-btn" title="Edit video">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="delete-btn" title="Delete video">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        ` : ''}
+                        <button class="download-btn" title="Download video">
+                            <i class="fas fa-download"></i>
+                        </button>
+                    </div>
+                ` : ''}
+            </div>
+            <video controls preload="none">
+                <source src="${BUNNY_STREAM_URL}/${BUNNY_LIBRARY_ID}/${video.url}" type="video/mp4">
+                Your browser does not support the video tag.
+            </video>
+            <div class="video-info">
+                <h3>${video.title || 'Untitled'}</h3>
+                <div class="description-container">
+                    <p class="video-description">${video.description || ''}</p>
+                </div>
+                <div class="video-metadata">
+                    <p class="view-count" data-video-id="${video.id}">
+                        <i class="fas fa-eye"></i> ${currentViews} views
+                    </p>
+                    ${currentUser && currentUser.id === video.user_id ? `
+                        <button class="edit-description-btn">
+                            <i class="fas fa-edit"></i>
+                            Edit Details
+                        </button>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+        return card;
+    }
+
+    // Update the displayVideos function to use the new createVideoCard function
     async function displayVideos(videos) {
         const videoGrid = document.querySelector('.video-grid');
         if (!videoGrid) return;
@@ -534,23 +613,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
-        // Get fresh view counts for all videos
-        const videoIds = videos.map(v => v.id);
-        const { data: freshViewCounts, error: viewCountError } = await window.supabaseClient
-            .from('videos')
-            .select('id, views')
-            .in('id', videoIds);
-
-        if (viewCountError) {
-            console.error('Error fetching fresh view counts:', viewCountError);
-        }
-
-        // Create a map of video IDs to their fresh view counts
-        const viewCountMap = new Map();
-        if (freshViewCounts) {
-            freshViewCounts.forEach(v => viewCountMap.set(v.id, v.views || 0));
-        }
-
         for (const video of videos) {
             try {
                 // Skip invalid videos
@@ -559,65 +621,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     continue;
                 }
 
-                const card = document.createElement('div');
-                card.className = 'video-card';
-                card.setAttribute('data-video-id', video.id);
-                
-                // Use fresh view count from database if available, fallback to video object
-                const currentViews = viewCountMap.get(video.id) ?? video.views ?? 0;
-                card.setAttribute('data-views', currentViews);
-
-                // Get video URL
-                const { data } = window.supabaseClient.storage
-                    .from('videos')
-                    .getPublicUrl(video.url);
-
-                if (!data || !data.publicUrl) {
-                    console.log('Invalid video URL for video:', video.id);
-                    continue;
-                }
-
-                // Create card content with view count
-                card.innerHTML = `
-                    <div class="video-header">
-                        ${currentUser ? `
-                            <div class="video-controls">
-                                ${currentUser.id === video.user_id ? `
-                                    <button class="edit-btn" title="Edit video">
-                                        <i class="fas fa-edit"></i>
-                                    </button>
-                                    <button class="delete-btn" title="Delete video">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
-                                ` : ''}
-                                <button class="download-btn" title="Download video">
-                                    <i class="fas fa-download"></i>
-                                </button>
-                            </div>
-                        ` : ''}
-                    </div>
-                    <video controls preload="none">
-                        <source src="${data.publicUrl}" type="video/mp4">
-                        Your browser does not support the video tag.
-                    </video>
-                    <div class="video-info">
-                        <h3>${video.title || 'Untitled'}</h3>
-                        <div class="description-container">
-                            <p class="video-description">${video.description || ''}</p>
-                        </div>
-                        <div class="video-metadata">
-                            <p class="view-count" data-video-id="${video.id}">
-                                <i class="fas fa-eye"></i> ${currentViews} views
-                            </p>
-                            ${currentUser && currentUser.id === video.user_id ? `
-                                <button class="edit-description-btn">
-                                    <i class="fas fa-edit"></i>
-                                    Edit Details
-                                </button>
-                            ` : ''}
-                        </div>
-                    </div>
-                `;
+                const card = createVideoCard(video, video.views || 0);
 
                 // Add event listeners
                 const videoElement = card.querySelector('video');
@@ -625,7 +629,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 // Add view count tracking with persistence
                 if (videoElement && viewCountElement) {
-                    addViewCountListener(videoElement, { ...video, views: currentViews }, viewCountElement);
+                    addViewCountListener(videoElement, video, viewCountElement);
                 }
 
                 // Add edit functionality
@@ -855,6 +859,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Initial load of home videos
     await loadHomeVideos();
 
+    // Modify deleteVideo function to handle Bunny.net deletion
     async function deleteVideo(videoId) {
         try {
             showLoading(true);
@@ -868,15 +873,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             if (fetchError) throw fetchError;
 
-            // Delete from storage first
-            if (video.url) {
-                const { error: storageError } = await window.supabaseClient.storage
-                    .from('videos')
-                    .remove([video.url]);
+            // Delete from Bunny.net first
+            if (video.bunny_id) {
+                const deleteResponse = await fetch(`${BUNNY_BASE_URL}/${BUNNY_LIBRARY_ID}/videos/${video.bunny_id}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'AccessKey': BUNNY_API_KEY
+                    }
+                });
 
-                if (storageError) {
-                    console.error('Storage delete error:', storageError);
-                    // Continue even if storage delete fails
+                if (!deleteResponse.ok) {
+                    console.error('Bunny.net delete error:', await deleteResponse.text());
                 }
             }
 
@@ -888,22 +895,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             if (dbError) throw dbError;
 
-            // Force a complete reload of the current section
+            // Refresh the current section
             const activeSection = document.querySelector('.sidebar-item.active span').textContent.toLowerCase();
-            switch (activeSection) {
-                case 'home':
-                    await loadHomeVideos();
-                    break;
-                case 'explore':
-                    await loadExploreVideos();
-                    break;
-                case 'trending':
-                    await loadTrendingVideos();
-                    break;
-                case 'library':
-                    await loadLibraryVideos();
-                    break;
-            }
+            await loadSectionVideos(activeSection);
 
             showError('Video deleted successfully');
             return true;
