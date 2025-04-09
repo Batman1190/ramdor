@@ -512,6 +512,17 @@ body {
     transform: scale(1.1);
 }
 
+/* Video Description */
+.video-description {
+    margin: 10px 0;
+    color: #666;
+    font-size: 0.9em;
+    line-height: 1.4;
+    max-height: 60px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 /* Modal Styles */
 .modal {
     position: fixed;
@@ -519,7 +530,7 @@ body {
     left: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(0, 0, 0, 0.7);
+    background: rgba(0, 0, 0, 0.5);
     display: flex;
     justify-content: center;
     align-items: center;
@@ -527,60 +538,79 @@ body {
 }
 
 .modal-content {
-    background-color: var(--secondary-color);
+    background: white;
     padding: 20px;
-    border-radius: 10px;
+    border-radius: 8px;
     width: 90%;
     max-width: 500px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
 }
 
-.modal-content h2 {
-    margin-bottom: 20px;
-    color: var(--text-color);
-}
-
-.modal-content input,
-.modal-content textarea {
-    width: 100%;
-    padding: 10px;
+.form-group {
     margin-bottom: 15px;
-    border: 1px solid #444;
-    border-radius: 5px;
-    background-color: #333;
-    color: var(--text-color);
 }
 
-.modal-content textarea {
-    height: 100px;
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    color: #333;
+    font-weight: bold;
+}
+
+.form-group input,
+.form-group textarea {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.form-group textarea {
+    min-height: 100px;
     resize: vertical;
 }
 
 .modal-buttons {
     display: flex;
-    gap: 10px;
     justify-content: flex-end;
+    gap: 10px;
+    margin-top: 20px;
 }
 
 .modal-buttons button {
     padding: 8px 16px;
     border: none;
-    border-radius: 5px;
+    border-radius: 4px;
     cursor: pointer;
+    font-size: 14px;
     transition: all 0.3s ease;
 }
 
 .modal-buttons button[type="submit"] {
-    background-color: var(--primary-color);
+    background: #4CAF50;
     color: white;
 }
 
 .modal-buttons button.cancel {
-    background-color: #666;
+    background: #f44336;
     color: white;
 }
 
 .modal-buttons button:hover {
+    opacity: 0.9;
     transform: scale(1.05);
+}
+
+/* Download Button */
+.download-btn {
+    background-color: rgba(33, 150, 243, 0.9);
+    color: white;
+}
+
+.download-btn:hover {
+    background-color: rgb(33, 150, 243);
+    transform: scale(1.1);
 }
 
 .no-videos {
@@ -623,5 +653,68 @@ body {
     height: 32px;
     border-radius: 50%;
     object-fit: cover;
+    display: none;
+}
+
+.video-metadata {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.edit-description-btn {
+    background: none;
+    border: none;
+    color: #666;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.9em;
+    padding: 5px 10px;
+    border-radius: 4px;
+    transition: all 0.3s ease;
+}
+
+.edit-description-btn:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: #fff;
+}
+
+.edit-description-btn i {
+    font-size: 0.9em;
+}
+
+.video-description {
+    margin: 10px 0;
+    color: #999;
+    font-size: 0.9em;
+    line-height: 1.4;
+    max-height: 60px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: pre-line;
+}
+
+.modal-content h2 {
+    color: #333;
+    margin-bottom: 20px;
+    font-size: 1.5em;
+}
+
+.save-btn {
+    background-color: #4CAF50 !important;
+    color: white !important;
+}
+
+.save-btn:hover {
+    background-color: #45a049 !important;
+}
+
+/* Hide controls for non-signed-in users */
+.video-controls:empty {
     display: none;
 }

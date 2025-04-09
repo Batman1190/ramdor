@@ -254,7 +254,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                         title: file.name,
                         url: `${currentUser.id}/${fileName}`,
                         user_id: currentUser.id,
-                        views: 0
+                        views: 0,
+                        description: '' // Initialize with empty description
                     }])
                     .select();
         
@@ -264,7 +265,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     return;
                 }
         
-                showError('Video uploaded successfully!');
+                showError('Video uploaded successfully! You can now add a description by clicking the Edit Details button.');
                 loadVideos();
             } catch (err) {
                 console.error('Upload error:', err);
@@ -467,12 +468,20 @@ document.addEventListener('DOMContentLoaded', async () => {
                     isValidVideo = false;
                 }
 
-                // Show delete button only for video owners who are signed in
+                // Show controls only for signed-in users
                 const userControls = `
                     <div class="video-controls">
-                        ${currentUser && currentUser.id === video.user_id ? `
-                            <button class="delete-btn" title="Delete video" data-video-id="${video.id}">
-                                <i class="fas fa-trash"></i>
+                        ${currentUser ? `
+                            ${currentUser.id === video.user_id ? `
+                                <button class="edit-btn" title="Edit video" data-video-id="${video.id}">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button class="delete-btn" title="Delete video" data-video-id="${video.id}">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            ` : ''}
+                            <button class="download-btn" title="Download video">
+                                <i class="fas fa-download"></i>
                             </button>
                         ` : ''}
                     </div>
@@ -492,18 +501,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                             <i class="fas fa-exclamation-triangle"></i>
                             <p>No video with supported format and MIME type found.</p>
                             ${currentUser && currentUser.id === video.user_id ? `
-                                <button class="delete-btn" title="Delete video" data-video-id="${video.id}" style="
-                                    background: #ff4d4d;
-                                    color: white;
-                                    border: none;
-                                    padding: 8px 16px;
-                                    border-radius: 4px;
-                                    margin-top: 10px;
-                                    cursor: pointer;
-                                    display: flex;
-                                    align-items: center;
-                                    gap: 8px;
-                                ">
+                                <button class="delete-btn" title="Delete video" data-video-id="${video.id}">
                                     <i class="fas fa-trash"></i> Delete this video
                                 </button>
                             ` : ''}
@@ -511,42 +509,58 @@ document.addEventListener('DOMContentLoaded', async () => {
                     `}
                     <div class="video-info">
                         <h3>${video.title || 'Untitled Entry'}</h3>
-                        <p>${video.user_id || 'Unknown User'}</p>
-                        <p><span class="view-count">${video.views || 0}</span> views • ${new Date(video.created_at).toLocaleDateString()}</p>
+                        <p class="video-description">${video.description || 'No description available'}</p>
+                        <div class="video-metadata">
+                            <p><span class="view-count">${video.views || 0}</span> views</p>
+                            ${currentUser && currentUser.id === video.user_id ? `
+                                <button class="edit-description-btn" title="Edit description">
+                                    <i class="fas fa-edit"></i> Edit Details
+                                </button>
+                            ` : ''}
+                        </div>
                     </div>
                 `;
 
                 // Add edit functionality
-                const editBtn = card.querySelector('.edit-btn');
-                if (editBtn) {
+                const editBtn = card.querySelector('.edit-btn, .edit-description-btn');
+                if (editBtn && currentUser && currentUser.id === video.user_id) {
                     editBtn.addEventListener('click', async (e) => {
                         e.preventDefault();
-                        const modal = showModal(`
+                        const modal = document.createElement('div');
+                        modal.className = 'modal';
+                        modal.innerHTML = `
                             <div class="modal-content">
-                                <h2>Edit Video</h2>
+                                <h2>Edit Video Details</h2>
                                 <form id="edit-form">
-                                    <input type="text" id="video-title" value="${video.title}" placeholder="Video title">
-                                    <textarea id="video-description" placeholder="Video description">${video.description || ''}</textarea>
+                                    <div class="form-group">
+                                        <label for="video-title">Title</label>
+                                        <input type="text" id="video-title" value="${video.title || ''}" placeholder="Video title" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="video-description">Description</label>
+                                        <textarea id="video-description" placeholder="Add a description" rows="4">${video.description || ''}</textarea>
+                                    </div>
                                     <div class="modal-buttons">
-                                        <button type="submit">Save</button>
+                                        <button type="submit" class="save-btn">Save Changes</button>
                                         <button type="button" class="cancel">Cancel</button>
                                     </div>
                                 </form>
                             </div>
-                        `);
+                        `;
+                        document.body.appendChild(modal);
 
                         const form = modal.querySelector('#edit-form');
                         form.addEventListener('submit', async (e) => {
                             e.preventDefault();
-                            const newTitle = form.querySelector('#video-title').value;
-                            const newDescription = form.querySelector('#video-description').value;
+                            const newTitle = form.querySelector('#video-title').value.trim();
+                            const newDescription = form.querySelector('#video-description').value.trim();
 
                             try {
                                 showLoading(true);
                                 const { error: updateError } = await window.supabaseClient
                                     .from('videos')
                                     .update({ 
-                                        title: newTitle,
+                                        title: newTitle || 'Untitled Entry',
                                         description: newDescription
                                     })
                                     .eq('id', video.id);
@@ -554,9 +568,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                                 if (updateError) throw updateError;
 
                                 // Update the card
-                                card.querySelector('h3').textContent = newTitle;
+                                card.querySelector('h3').textContent = newTitle || 'Untitled Entry';
+                                card.querySelector('.video-description').textContent = newDescription || 'No description available';
                                 modal.remove();
-                                showError('Video updated successfully');
+                                showError('Video details updated successfully');
                             } catch (err) {
                                 console.error('Error updating video:', err);
                                 showError('Error updating video: ' + err.message);
@@ -566,12 +581,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                         });
 
                         modal.querySelector('.cancel').addEventListener('click', () => modal.remove());
+                        modal.addEventListener('click', (e) => {
+                            if (e.target === modal) modal.remove();
+                        });
                     });
                 }
 
                 // Add download functionality
                 const downloadBtn = card.querySelector('.download-btn');
-                if (downloadBtn) {
+                if (downloadBtn && currentUser) {
                     downloadBtn.addEventListener('click', async (e) => {
                         e.preventDefault();
                         try {
@@ -581,7 +599,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                             const url = window.URL.createObjectURL(blob);
                             const a = document.createElement('a');
                             a.href = url;
-                            a.download = video.title;
+                            a.download = video.title || 'video';
                             document.body.appendChild(a);
                             a.click();
                             window.URL.revokeObjectURL(url);
