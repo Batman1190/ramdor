@@ -567,6 +567,19 @@ document.addEventListener('DOMContentLoaded', async () => {
                                 showLoading(true);
                                 console.log('Saving video details:', { id: video.id, title: newTitle, description: newDescription });
                                 
+                                // First verify the video exists
+                                const { data: existingVideo, error: checkError } = await window.supabaseClient
+                                    .from('videos')
+                                    .select('id')
+                                    .eq('id', video.id)
+                                    .single();
+
+                                if (checkError || !existingVideo) {
+                                    console.error('Video not found:', checkError);
+                                    throw new Error('Video not found');
+                                }
+
+                                // Then update it
                                 const { data: updateData, error: updateError } = await window.supabaseClient
                                     .from('videos')
                                     .update({ 
@@ -574,7 +587,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                                         description: newDescription
                                     })
                                     .eq('id', video.id)
-                                    .select('*')
+                                    .select()
                                     .single();
 
                                 if (updateError) {
@@ -585,10 +598,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                                 // Update the card
                                 if (updateData) {
                                     console.log('Successfully updated video:', updateData);
+                                    video.title = updateData.title;
+                                    video.description = updateData.description;
+                                    
                                     card.querySelector('h3').textContent = updateData.title;
                                     card.querySelector('.video-description').textContent = updateData.description || 'No description available';
                                     modal.remove();
                                     showError('Video details updated successfully');
+                                } else {
+                                    throw new Error('Failed to update video details');
                                 }
                             } catch (err) {
                                 console.error('Error updating video:', err);
