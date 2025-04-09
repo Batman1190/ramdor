@@ -291,11 +291,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 </div>
             `;
 
-            // Query with strict filtering
+            // Get all videos with their current view counts
             const { data: videos, error } = await window.supabaseClient
                 .from('videos')
                 .select('*')
-                .not('title', 'ilike', '%test video%')  // More flexible pattern matching
                 .not('user_id', 'is', null)
                 .lt('created_at', new Date().toISOString());
 
@@ -305,24 +304,48 @@ document.addEventListener('DOMContentLoaded', async () => {
                 return [];
             }
 
-            // Additional strict filtering
-            const validVideos = videos.filter(video => {
-                const isValid = video && 
-                              video.id && 
-                              video.user_id &&
-                              video.title &&
-                              !video.title.toLowerCase().includes('test video') &&
-                              new Date(video.created_at) <= new Date();
-                
-                if (!isValid) {
-                    console.log('Filtering out invalid video:', video);
-                }
-                return isValid;
-            });
+            // Check each video's existence and initialize view count if needed
+            const validVideos = [];
+            for (const video of videos) {
+                try {
+                    // Ensure views is initialized
+                    if (!video.views) {
+                        const { data: updateData, error: updateError } = await window.supabaseClient
+                            .from('videos')
+                            .update({ views: 0 })
+                            .eq('id', video.id)
+                            .select()
+                            .single();
+                            
+                        if (updateData) {
+                            video.views = 0;
+                        }
+                    }
 
-            // Apply sorting after filtering
+                    // Try to get the file from storage
+                    const { data } = window.supabaseClient.storage
+                        .from('videos')
+                        .getPublicUrl(video.url);
+                    
+                    // Check if the file exists
+                    const response = await fetch(data.publicUrl, { method: 'HEAD' });
+                    if (response.ok) {
+                        validVideos.push(video);
+                    } else {
+                        console.log('Video file not found in storage, removing from database:', video.id);
+                        await window.supabaseClient
+                            .from('videos')
+                            .delete()
+                            .eq('id', video.id);
+                    }
+                } catch (err) {
+                    console.log('Error checking video file:', err);
+                }
+            }
+
+            // Apply sorting
             if (sortBy === 'views') {
-                validVideos.sort((a, b) => (b.views || 0) - (a.views || 0));
+                validVideos.sort((a, b) => (parseInt(b.views) || 0) - (parseInt(a.views) || 0));
             } else {
                 validVideos.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
             }
@@ -335,6 +358,53 @@ document.addEventListener('DOMContentLoaded', async () => {
         } finally {
             showLoading(false);
         }
+    }
+
+    // Function to update view count
+    async function incrementViewCount(video, viewCountElement) {
+        try {
+            // Get current views from database
+            const { data: currentData, error: getError } = await window.supabaseClient
+                .from('videos')
+                .select('views')
+                .eq('id', video.id)
+                .single();
+
+            if (getError) throw getError;
+
+            // Calculate new view count
+            const currentViews = parseInt(currentData.views || 0);
+            const newViews = currentViews + 1;
+
+            // Update view count in database
+            const { data: updateData, error: updateError } = await window.supabaseClient
+                .from('videos')
+                .update({ views: newViews })
+                .eq('id', video.id)
+                .select()
+                .single();
+
+            if (updateError) throw updateError;
+
+            // Update UI
+            if (viewCountElement && updateData) {
+                viewCountElement.textContent = updateData.views;
+                video.views = updateData.views;
+            }
+        } catch (err) {
+            console.error('Error updating view count:', err);
+        }
+    }
+
+    // Modify the video event listener in displayVideos
+    function addViewCountListener(videoElement, video, viewCountElement) {
+        let viewCounted = false;
+        videoElement.addEventListener('play', async () => {
+            if (!viewCounted) {
+                viewCounted = true;
+                await incrementViewCount(video, viewCountElement);
+            }
+        });
     }
 
     async function displayVideos(videos) {
@@ -552,74 +622,57 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 // Add view count tracking
                 const videoElement = card.querySelector('video');
-                let viewCounted = false;
+                if (videoElement) {
+                    let viewCounted = false;
+                    videoElement.addEventListener('play', async () => {
+                        if (!viewCounted) {
+                            try {
+                                // First update the view count directly
+                                const { error: updateError } = await window.supabaseClient.rpc(
+                                    'increment_view_count',
+                                    { video_id: video.id }
+                                );
 
-                videoElement.addEventListener('play', async () => {
-                    if (!viewCounted) {
-                        viewCounted = true;
-                        try {
-                            // Update view count in the database
-                            const { data: updateData, error: updateError } = await window.supabaseClient
-                                .from('videos')
-                                .update({ views: (video.views || 0) + 1 })
-                                .eq('id', video.id);
-
-                            if (updateError) {
-                                console.error('Error updating view count:', updateError);
-                            } else {
-                                // Update the view count in the UI
-                                const viewCountElement = card.querySelector('.view-count');
-                                viewCountElement.textContent = (video.views || 0) + 1;
-                                video.views = (video.views || 0) + 1;
-                            }
-                        } catch (err) {
-                            console.error('Error tracking view:', err);
-                        }
-                    }
-                });
-
-                videoElement.addEventListener('error', (e) => {
-                    console.error('Video loading error:', e.target.error);
-                    card.innerHTML = `
-                        <div class="invalid-video">
-                            <i class="fas fa-exclamation-triangle"></i>
-                            <p>No video with supported format and MIME type found.</p>
-                            <button class="delete-btn force-delete-btn" title="Delete entry" data-video-id="${video.id}" data-force-delete="true" style="
-                                background: #ff4d4d;
-                                color: white;
-                                border: none;
-                                padding: 8px 16px;
-                                border-radius: 4px;
-                                margin-top: 10px;
-                                cursor: pointer;
-                                display: flex;
-                                align-items: center;
-                                gap: 8px;
-                            ">
-                                <i class="fas fa-trash"></i> Delete this entry
-                            </button>
-                        </div>
-                        <div class="video-info">
-                            <h3>${video.title || 'Untitled Entry'}</h3>
-                            <p>${video.user_id || 'Unknown User'}</p>
-                            <p><span class="view-count">${video.views || 0}</span> views • ${new Date(video.created_at).toLocaleDateString()}</p>
-                        </div>
-                    `;
-
-                    // Add click handler for the new delete button
-                    const newDeleteBtn = card.querySelector('.force-delete-btn');
-                    if (newDeleteBtn) {
-                        newDeleteBtn.addEventListener('click', async (e) => {
-                            e.preventDefault();
-                            if (confirm('Are you sure you want to delete this invalid entry? This action cannot be undone.')) {
-                                const success = await forceDeleteVideo(video);
-                                if (success) {
-                                    card.remove();
+                                if (updateError) {
+                                    console.error('Error updating view count:', updateError);
+                                    return;
                                 }
+
+                                // Then get the updated count
+                                const { data: updatedVideo, error: getError } = await window.supabaseClient
+                                    .from('videos')
+                                    .select('views')
+                                    .eq('id', video.id)
+                                    .single();
+
+                                if (getError) {
+                                    console.error('Error getting updated view count:', getError);
+                                    return;
+                                }
+
+                                // Update UI
+                                if (updatedVideo) {
+                                    const viewCountElement = card.querySelector('.view-count');
+                                    if (viewCountElement) {
+                                        viewCountElement.textContent = updatedVideo.views;
+                                        video.views = updatedVideo.views;
+                                        console.log(`View count updated to ${updatedVideo.views}`);
+                                        viewCounted = true;
+                                    }
+                                }
+                            } catch (err) {
+                                console.error('Error in view count update:', err);
                             }
-                        });
-                    }
-                });
+                        }
+                    });
+                }
+
+                // Initialize view count display
+                const viewCountElement = card.querySelector('.view-count');
+                if (viewCountElement) {
+                    viewCountElement.textContent = video.views || '0';
+                    console.log(`Initialized view count for ${video.title}: ${video.views || 0}`);
+                }
 
                 videoGrid.appendChild(card);
             } catch (err) {
