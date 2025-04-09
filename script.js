@@ -517,7 +517,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                     `}
                     <div class="video-info">
                         <h3>${video.title || 'Untitled Entry'}</h3>
-                        <p class="video-description">${video.description || 'No description available'}</p>
+                        <div class="description-container">
+                            <p class="video-description">${video.description || 'No description available'}</p>
+                        </div>
                         <div class="video-metadata">
                             <p><span class="view-count">${video.views || 0}</span> views</p>
                             ${currentUser && currentUser.id === video.user_id ? `
